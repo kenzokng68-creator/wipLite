@@ -48,6 +48,30 @@ class TimesheetEntry extends Model
         }
     }
 
+    /**
+     * Récupère dynamiquement les heures prévues si elles ne sont pas encore fixées.
+     */
+    public function getPlannedHoursAttribute($value)
+    {
+        if ($value > 0) return $value;
+
+        // Si la valeur en BDD est 0 ou nulle, on cherche dans le planning
+        $date = Carbon::parse($this->date);
+        $dayName = strtolower($date->format('l'));
+        $columnName = $dayName . '_hours';
+
+        $assignment = PlanningAssignment::where('employee_id', $this->timesheet->employee_id)
+            ->where('start_date', '<=', $this->date)
+            ->where(function ($q) {
+                $q->where('end_date', '>=', $this->date)
+                    ->orWhereNull('end_date');
+            })
+            ->where('status', 'validé')
+            ->first();
+
+        return $assignment ? $assignment->planningModel->$columnName : 0;
+    }
+
     public function isAbsent()
     {
         return !is_null($this->absence_type);
