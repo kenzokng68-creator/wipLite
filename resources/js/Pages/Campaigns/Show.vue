@@ -66,9 +66,9 @@ const props = defineProps({
     history: Array,
 
     /**
-     * Employés
+     * Employés disponibles
      */
-    employees: Array,
+    availableEmployees: Array,
 })
 
 /**
@@ -423,7 +423,7 @@ const qualifiedReplacements = computed(() => {
     /**
      * Même position
      */
-    return props.employees.filter(
+    return props.availableEmployees.filter(
 
         emp =>
 
@@ -435,6 +435,13 @@ const qualifiedReplacements = computed(() => {
             emp.id !==
             selectedAssignment.value.employee_id
     )
+})
+
+/**
+ * TCs disponibles pour affectation
+ */
+const availableTCs = computed(() => {
+    return props.availableEmployees.filter(emp => emp.position?.code === 'TC')
 })
 
 /**
@@ -557,6 +564,46 @@ const getStatusSeverity = (status) => {
                 <TabPanel :value="0">
 
                     <div class="flex flex-col gap-6">
+
+                        <!-- ============================= -->
+                        <!-- TÉLÉCONSEILLERS DISPONIBLES (SI CAMPAGNE VIDE) -->
+                        <!-- ============================= -->
+                        <div v-if="hierarchicalView.length === 0" class="bg-blue-50 border border-blue-100 rounded-3xl p-8 mb-4">
+                            <div class="flex items-center gap-4 mb-6">
+                                <div class="bg-blue-600 p-3 rounded-2xl">
+                                    <i class="pi pi-info-circle text-white text-xl"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-xl font-bold text-slate-900">Nouvelle Campagne</h3>
+                                    <p class="text-slate-600">Cette campagne n'a pas encore de ressources affectées. Commencez par affecter un Chef de Plateau.</p>
+                                </div>
+                            </div>
+
+                            <div v-if="availableTCs.length > 0">
+                                <h4 class="font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                                    <i class="pi pi-users"></i>
+                                    Téléconseillers disponibles ({{ availableTCs.length }})
+                                </h4>
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    <div v-for="tc in availableTCs.slice(0, 6)" :key="tc.id" class="bg-white p-4 rounded-2xl border border-slate-100 flex items-center gap-3">
+                                        <Avatar :label="getInitials(tc.first_name, tc.last_name)" shape="circle" />
+                                        <div class="flex-1 min-w-0">
+                                            <p class="font-medium text-slate-900 truncate">{{ tc.first_name }} {{ tc.last_name }}</p>
+                                            <p class="text-xs text-slate-500">{{ tc.email }}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div v-if="availableTCs.length > 6" class="mt-4 text-center">
+                                    <p class="text-sm text-slate-500 italic">Et {{ availableTCs.length - 6 }} autres téléconseillers disponibles...</p>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-8 flex justify-center">
+                                <Link :href="route('assign.cp')">
+                                    <Button label="Commencer les affectations" icon="pi pi-arrow-right" iconPos="right" class="rounded-xl px-6" />
+                                </Link>
+                            </div>
+                        </div>
 
                         <!-- ============================= -->
                         <!-- CP -->

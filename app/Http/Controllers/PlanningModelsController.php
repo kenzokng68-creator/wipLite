@@ -11,16 +11,19 @@ use Illuminate\Support\Facades\Auth;
 class PlanningModelsController extends Controller
 {
     /**
-     * Affiche la liste des modèles et les affectations.
+     * Affiche la liste des modèles de planning prédéfinis.
+     * Les modèles définissent les heures travaillées par jour de la semaine.
      */
     public function index()
     {
         return Inertia::render('Planning/Models/Index', [
+            // Récupération des modèles avec le nom du créateur et le nombre d'affectations
             'planningModels' => PlanningModel::with('creator:id,name')
                 ->withCount('assignments')
                 ->latest()
                 ->get(),
 
+            // Liste des plannings actuellement en cours de validité
             'activeAssignments' => PlanningAssignment::with(['employee.user', 'planningModel'])
                 ->where('status', 'validé')
                 ->latest()
@@ -36,7 +39,8 @@ class PlanningModelsController extends Controller
     }
 
     /**
-     * Enregistre un nouveau modèle.
+     * Enregistre un nouveau modèle de planning hebdomadaire.
+     * Calcule automatiquement le total des heures sur la semaine.
      */
     public function store(Request $request)
     {

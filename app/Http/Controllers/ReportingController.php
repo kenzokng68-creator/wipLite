@@ -100,6 +100,70 @@ class ReportingController extends Controller
         return $pdf->download('rapport_decisionnel_' . now()->format('Y-m-d') . '.pdf');
     }
 
+    public function hrReport()
+    {
+        return Inertia::render('Reports/Hr', [
+            'stats' => [
+                'total' => Employee::count(),
+                'active' => Employee::where('status', 'actif')->count(),
+                'inactive' => Employee::where('status', 'inactif')->count(),
+                'suspended' => Employee::where('status', 'suspendu')->count(),
+            ],
+            'employees' => Employee::with('position')->latest()->get()
+        ]);
+    }
+
+    public function campaignsReport()
+    {
+        return Inertia::render('Reports/Campaigns', [
+            'campaigns' => Campaign::withCount(['assignments' => function($q) {
+                $q->where('status', 'actif');
+            }])->get()
+        ]);
+    }
+
+    public function assignmentsReport()
+    {
+        return Inertia::render('Reports/Assignments', [
+            'assignments' => Assignment::with(['employee', 'campaign', 'manager', 'position'])
+                ->where('status', 'actif')
+                ->latest()
+                ->get()
+        ]);
+    }
+
+    public function timesheetsReport()
+    {
+        return Inertia::render('Reports/Timesheets', [
+            'stats' => [
+                'totalWorked' => TimesheetEntry::sum('total_hours'),
+                'totalPlanned' => TimesheetEntry::sum('planned_hours'),
+            ],
+            'entries' => TimesheetEntry::with(['timesheet.employee', 'timesheet.validator'])->latest()->take(100)->get()
+        ]);
+    }
+
+    public function teamReport()
+    {
+        $manager = auth()->user()->employee;
+        return Inertia::render('Reports/Team', [
+            'team' => Employee::whereIn('id', function($query) use ($manager) {
+                $query->select('employee_id')->from('assignments')->where('manager_id', $manager?->id)->where('status', 'actif');
+            })->with('position')->get()
+        ]);
+    }
+
+    public function productivityReport()
+    {
+        return Inertia::render('Reports/Productivity', [
+            'stats' => [
+                'globalEfficiency' => TimesheetEntry::where('planned_hours', '>', 0)
+                    ->select(DB::raw('AVG(total_hours / planned_hours) * 100 as avg_eff'))
+                    ->value('avg_eff') ?: 0
+            ]
+        ]);
+    }
+
     /*
     |--------------------------------------------------------------------------
     | DASHBOARD CHEF DE PLATEAU

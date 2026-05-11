@@ -16,12 +16,24 @@ use App\Models\Position;
 
 class PlanningAssignmentController extends Controller
 {
+    /**
+     * Affiche la liste globale des affectations de planning.
+     * Réservé aux Admins et Chefs de Plateau (CP).
+     * Organise les données par superviseur et inclut les agents de leur équipe.
+     */
     public function index()
     {
+        // Redirection si l'utilisateur n'a pas les droits de gestion globale
+        if (!auth()->user()->hasRole(['admin', 'cp'])) {
+            return redirect()->route('planning.mine');
+        }
+
+        // Récupération de toutes les affectations avec les relations nécessaires
         $allAssignments = PlanningAssignment::with(['employee.user.role', 'planningModel', 'creator'])
             ->orderBy('created_at', 'desc')
             ->get();
 
+        // Liste des superviseurs pour structurer l'affichage par équipe
         $supervisors = Employee::with('user.role')
             ->whereHas('user', function ($query) {
                 $query->whereHas('role', function ($q) {
@@ -38,6 +50,7 @@ class PlanningAssignmentController extends Controller
         // Récupérer le position_id pour SUP
         $supPosition = Position::where('code', 'SUP')->first();
 
+        // Structuration des données : Superviseur -> Ses Plannings + Plannings de son équipe (Agents)
         $supervisorAssignments = $supervisors->map(function ($supervisor) use ($allAssignments) {
             $supervisorAssignments = $allAssignments->where('employee_id', $supervisor->id);
 
@@ -47,6 +60,7 @@ class PlanningAssignmentController extends Controller
                 ->where('status', 'actif')
                 ->first();
 
+            // Récupération des agents (TC) actuellement sous la responsabilité de ce superviseur
             $teleconseillerIds = Assignment::where('manager_id', $supervisor->id)
                 ->where('status', 'actif')
                 ->pluck('employee_id');
@@ -109,6 +123,11 @@ class PlanningAssignmentController extends Controller
         ]);
     }
 
+    /**
+     * Gère la création d'une nouvelle affectation.
+     * Lorsqu'un modèle est affecté à un superviseur, il est automatiquement
+     * propagé à tous les agents de son équipe active.
+     */
     public function store(Request $request)
     {
         $request->validate([
@@ -120,13 +139,16 @@ class PlanningAssignmentController extends Controller
 
         $supervisor = Employee::findOrFail($request->supervisor_id);
 
+        // Identification automatique des agents sous la responsabilité du superviseur
         $teleconseillerIds = Assignment::where('manager_id', $supervisor->id)
             ->where('status', 'actif')
             ->pluck('employee_id');
 
+        // Préparation de la liste des bénéficiaires (Superviseur + ses Agents)
         $employeesToAssign = collect([$supervisor])->merge(Employee::whereIn('id', $teleconseillerIds)->get());
 
         foreach ($employeesToAssign as $employee) {
+            // Vérification de chevauchement de dates pour éviter les doubles plannings
             $exists = PlanningAssignment::where('employee_id', $employee->id)
                 ->where(function ($query) use ($request) {
                     $query->whereBetween('start_date', [$request->start_date, $request->end_date])
@@ -134,6 +156,7 @@ class PlanningAssignmentController extends Controller
                 })->exists();
 
             if (!$exists) {
+                // Création de l'affectation avec le statut 'en attente' par défaut
                 $assignment = PlanningAssignment::create([
                     'employee_id' => $employee->id,
                     'planning_model_id' => $request->planning_model_id,
@@ -143,6 +166,7 @@ class PlanningAssignmentController extends Controller
                     'status' => 'en attente',
                 ]);
 
+                // Enregistrement dans l'historique pour traçabilité
                 PlanningHistory::create([
                     'planning_assignment_id' => $assignment->id,
                     'old_status' => '',
@@ -157,6 +181,9 @@ class PlanningAssignmentController extends Controller
             ->with('success', 'Affectations créées avec succès. En attente de validation.');
     }
 
+    /**
+     * Valide une affectation spécifique pour la rendre effective.
+     */
     public function validateAssignment(Request $request, $id)
     {
         $assignment = PlanningAssignment::findOrFail($id);
@@ -296,15 +323,43 @@ class PlanningAssignmentController extends Controller
         ]);
     }
 
+    /**
+     * Affiche l'historique complet des changements de statut des plannings.
+     * Le contenu est filtré selon le rôle de l'utilisateur (TC, SUP, Admin/CP).
+     */
     public function history()
     {
-        $history = PlanningHistory::with(['planningAssignment.employee.user', 'changedBy'])
-            ->orderBy('created_at', 'desc')
-            ->get()
+        $query = PlanningHistory::with(['planningAssignment.employee.user', 'changedBy'])
+            ->orderBy('created_at', 'desc');
+
+        // Filtrage de sécurité : les agents et superviseurs ne voient que ce qui les concerne
+        if (!auth()->user()->hasRole(['admin', 'cp'])) {
+            $employeeId = auth()->user()->employee->id;
+
+            if (auth()->user()->hasRole('sup')) {
+                // Le superviseur voit son historique + celui des agents sous sa responsabilité
+                $agentIds = Assignment::where('manager_id', $employeeId)
+                    ->where('status', 'actif')
+                    ->pluck('employee_id');
+
+                $ids = $agentIds->push($employeeId);
+
+                $query->whereHas('planningAssignment', function($q) use ($ids) {
+                    $q->whereIn('employee_id', $ids);
+                });
+            } else {
+                // Le Téléconseiller (TC) ne voit strictement que son propre historique
+                $query->whereHas('planningAssignment', function($q) use ($employeeId) {
+                    $q->where('employee_id', $employeeId);
+                });
+            }
+        }
+
+        $history = $query->get()
             ->map(fn($h) => [
                 'id' => $h->id,
                 'planning_assignment' => [
-                    'employee_name' => $h->planningAssignment->employee->user->name,
+                    'employee_name' => $h->planningAssignment->employee->user->name ?? 'Inconnu',
                 ],
                 'old_status' => $h->old_status,
                 'new_status' => $h->new_status,
@@ -315,6 +370,68 @@ class PlanningAssignmentController extends Controller
 
         return Inertia::render('Planning/Assignments/History', [
             'history' => $history
+        ]);
+    }
+
+    /**
+     * Vue personnelle pour chaque employé afin de consulter son planning validé.
+     */
+    public function mine()
+    {
+        $employee = auth()->user()->employee;
+
+        $assignments = PlanningAssignment::with(['planningModel', 'creator'])
+            ->where('employee_id', $employee->id)
+            ->orderBy('start_date', 'desc')
+            ->get()
+            ->map(fn($a) => [
+                'id' => $a->id,
+                'model' => ['name' => $a->planningModel?->name ?? 'N/A'],
+                'start_date' => $a->start_date ? $a->start_date->format('d/m/Y') : 'N/A',
+                'end_date' => $a->end_date ? $a->end_date->format('d/m/Y') : 'N/A',
+                'status' => $a->status,
+                'creator' => $a->creator->name ?? 'Système',
+            ]);
+
+        return Inertia::render('Planning/Mine', [
+            'assignments' => $assignments
+        ]);
+    }
+
+    /**
+     * Vue spécifique pour le superviseur lui permettant de voir les plannings de son équipe.
+     */
+    public function team()
+    {
+        // Sécurité supplémentaire : seuls les superviseurs peuvent accéder à cette vue
+        if (!auth()->user()->hasRole('sup')) {
+            return redirect()->route('planning.mine');
+        }
+
+        $managerId = auth()->user()->employee->id;
+
+        // Identification des agents de l'équipe
+        $agentIds = Assignment::where('manager_id', $managerId)
+            ->where('status', 'actif')
+            ->pluck('employee_id');
+
+        $assignments = PlanningAssignment::with(['employee.user', 'planningModel'])
+            ->whereIn('employee_id', $agentIds)
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(fn($a) => [
+                'id' => $a->id,
+                'employee' => [
+                    'name' => $a->employee->user->name,
+                ],
+                'model' => ['name' => $a->planningModel?->name ?? 'N/A'],
+                'start_date' => $a->start_date ? $a->start_date->format('d/m/Y') : 'N/A',
+                'end_date' => $a->end_date ? $a->end_date->format('d/m/Y') : 'N/A',
+                'status' => $a->status,
+            ]);
+
+        return Inertia::render('Planning/Team', [
+            'assignments' => $assignments
         ]);
     }
 

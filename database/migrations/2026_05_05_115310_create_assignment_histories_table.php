@@ -19,7 +19,7 @@ return new class extends Migration
             $table->foreignId('new_manager_id')->nullable()->constrained('employees');
             $table->foreignId('old_campaign_id')->nullable()->constrained('campaigns');
             $table->foreignId('new_campaign_id')->nullable()->constrained('campaigns');
-            $table->enum('action_type', ['assign', 'release', 'transfer']);
+            $table->enum('action_type', ['assign', 'release', 'transfer', 'reassign']);
             $table->foreignId('changed_by')->constrained('users');
             $table->text('reason')->nullable();
             $table->timestamp('created_at')->useCurrent();

@@ -146,6 +146,14 @@ class Employee extends Model
         return $this->hasMany(EmployeeHistory::class)->latest();
     }
 
+    /**
+     * Les affectations de l'employé aux campagnes
+     */
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(Assignment::class);
+    }
+
 
     // -------------------------------------------------------
     // Filtres réutilisables

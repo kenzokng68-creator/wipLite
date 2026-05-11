@@ -274,13 +274,7 @@ const weekDays = [
                         <div class="p-4 bg-white/20 rounded-2xl backdrop-blur-md border border-white/30">
                             <Clock class="w-7 h-7" />
                         </div>
-<<<<<<< HEAD
-                        <span
-                            class="text-[11px] font-black uppercase tracking-[0.25em] text-blue-100"
-                            >Total Hebdomadaire</span>
-=======
                         <span class="text-[11px] font-black uppercase tracking-[0.25em] text-blue-100">Total Hebdomadaire</span>
->>>>>>> 3e5efeae7c2975e7930ea8885b6a3ce568d7cf27
                     </div>
                     <div class="text-5xl font-black tabular-nums tracking-tighter">
                         {{ autoTotal }}<span class="text-xl ml-2 opacity-50 font-medium">h</span>

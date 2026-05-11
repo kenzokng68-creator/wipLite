@@ -7,12 +7,8 @@ import Dialog from 'primevue/dialog';
 import Dropdown from 'primevue/dropdown';
 import Tag from 'primevue/tag';
 import InputText from 'primevue/inputtext';
-import IconField from 'primevue/iconfield';
-import InputIcon from 'primevue/inputicon';
 import { useToast } from 'primevue/usetoast';
-import { useConfirm } from 'primevue/useconfirm';
 import { ref, computed } from 'vue';
-import { FilterMatchMode } from '@primevue/core/api';
 import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
@@ -26,15 +22,9 @@ const props = defineProps({
 console.log(props.employees);
 // Variables d'état pour la gestion des modaux (dialogues)
 const toast = useToast();
-const confirm = useConfirm();
 const assignmentDialog = ref(false); // Modal de nouvelle affectation
 const releaseDialog = ref(false);    // Modal de libération/transfert
 const submitted = ref(false);
-
-// --- FILTRAGE PRIME VUE AUTOMATIQUE ---
-const filters = ref({
-    global: { value: null, matchMode: FilterMatchMode.CONTAINS },
-});
 
 // Objet pour stocker les données du formulaire de nouvelle affectation
 const newAssignment = ref({
@@ -104,25 +94,9 @@ const saveAssignment = () => {
  * Ouvre le modal de libération pour une affectation spécifique
  */
 const confirmRelease = (data) => {
-    confirm.require({
-        message: `Voulez-vous vraiment libérer ${data.employee.first_name} ${data.employee.last_name} de la campagne ${data.campaign.name} ?`,
-        header: 'Confirmation de libération',
-        icon: 'pi pi-exclamation-triangle',
-        rejectProps: {
-            label: 'Annuler',
-            severity: 'secondary',
-            variant: 'text'
-        },
-        acceptProps: {
-            label: 'Procéder',
-            severity: 'danger'
-        },
-        accept: () => {
-            selectedAssignment.value = data;
-            releaseData.value = { mode: 'solo', new_manager_id: null, reason: '' };
-            releaseDialog.value = true;
-        }
-    });
+    selectedAssignment.value = data;
+    releaseData.value = { mode: 'solo', new_manager_id: null, reason: '' };
+    releaseDialog.value = true;
 };
 
 /**
@@ -158,34 +132,19 @@ const getPositionSeverity = (code) => {
 
 <template>
     <AppLayout>
-        <div class="space-y-6">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h2 class="text-3xl font-black text-slate-800 tracking-tight">Gestion des Affectations</h2>
-                    <p class="text-slate-500 font-medium">Gérez l'organisation hiérarchique de vos équipes par campagne.</p>
+        <div class="p-4">
+            <div class="card bg-white border-round shadow-1">
+                <!-- Barre d'outils avec bouton d'ajout -->
+                <div class="flex justify-between items-center p-4 border-b">
+                    <h2 class="text-xl font-bold m-0">Gestion des Affectations</h2>
+                    <Button label="Nouvelle Affectation" icon="pi pi-plus" class="p-button-primary" @click="openNew" />
                 </div>
-                <Button label="Nouvelle Affectation" icon="pi pi-plus" class="!bg-gradient-to-r !from-blue-600 !to-indigo-600 !border-0 !rounded-2xl !px-6 !py-3 !font-black !text-xs !uppercase !tracking-widest !text-white shadow-xl shadow-blue-500/20 hover:-translate-y-0.5 transition-all" @click="openNew" />
-            </div>
 
-            <div class="card !border-0 !shadow-2xl !shadow-slate-200/50 !rounded-[2.5rem] overflow-hidden bg-white/70 backdrop-blur-md border border-white/50">
                 <!-- Tableau des affectations actives -->
-                <DataTable 
-                    :value="props.assignments" 
-                    v-model:filters="filters"
-                    :globalFilterFields="['employee.first_name', 'employee.last_name', 'employee.matricule', 'campaign.name', 'position.name', 'manager.first_name', 'manager.last_name']"
-                    paginator :rows="10" 
-                    class="p-datatable-sm"
-                    paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
-                    currentPageReportTemplate="Affichage de {first} à {last} sur {totalRecords}">
+                <DataTable :value="props.assignments" paginator :rows="10" class="p-datatable-sm">
                     <template #header>
-                        <div class="flex justify-between items-center py-4 px-6 bg-white/30">
-                            <span class="text-slate-800 font-black uppercase tracking-widest text-xs">Ressources affectées</span>
-                            <IconField iconPosition="left">
-                                <InputIcon>
-                                    <i class="pi pi-search" />
-                                </InputIcon>
-                                <InputText v-model="filters['global'].value" placeholder="Recherche automatique..." class="!rounded-2xl !bg-white/80 !border-slate-100 !text-sm focus:!ring-2 focus:!ring-blue-500/20" />
-                            </IconField>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">Liste des ressources affectées aux campagnes</span>
                         </div>
                     </template>
 
@@ -224,111 +183,99 @@ const getPositionSeverity = (code) => {
             </div>
 
             <!-- MODAL DE NOUVELLE AFFECTATION -->
-            <Dialog v-model:visible="assignmentDialog" header="Nouvelle Affectation" :style="{ width: '550px' }" modal class="!rounded-[2.5rem] !bg-white/90 !backdrop-blur-xl !border-white/50 !shadow-2xl">
-                <div class="flex flex-col gap-6 pt-4">
+            <Dialog v-model:visible="assignmentDialog" header="Nouvelle Affectation" :style="{ width: '500px' }" modal class="p-fluid">
+                <div class="flex flex-col gap-4 mt-2">
                     <!-- Choix de l'employé -->
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Employé</label>
-                        <Dropdown v-model="newAssignment.employee_id" :options="props.employees" optionLabel="email" optionValue="id" filter placeholder="Choisir un employé" class="!rounded-xl !bg-white/50 !border-slate-100 !text-sm" />
+                    <div>
+                        <label class="font-bold block mb-1">Employé</label>
+                        <Dropdown v-model="newAssignment.employee_id" :options="props.employees" optionLabel="email" optionValue="id" filter placeholder="Choisir un employé" />
                     </div>
 
-                    <div class="grid grid-cols-2 gap-4">
-                        <!-- Choix de la campagne -->
-                        <div class="space-y-2">
-                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Campagne</label>
-                            <Dropdown v-model="newAssignment.campaign_id" :options="props.campaigns" optionLabel="name" optionValue="id" placeholder="Choisir une campagne" class="!rounded-xl !bg-white/50 !border-slate-100 !text-sm" />
-                        </div>
+                    <!-- Choix de la campagne -->
+                    <div>
+                        <label class="font-bold block mb-1">Campagne</label>
+                        <Dropdown v-model="newAssignment.campaign_id" :options="props.campaigns" optionLabel="name" optionValue="id" placeholder="Choisir une campagne" />
+                    </div>
 
-                        <!-- Choix du poste dans la campagne -->
-                        <div class="space-y-2">
-                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Poste occupé</label>
-                            <Dropdown v-model="newAssignment.position_id" :options="props.positions" optionLabel="name" optionValue="id" placeholder="Définir le rôle" class="!rounded-xl !bg-white/50 !border-slate-100 !text-sm" />
-                        </div>
+                    <!-- Choix du poste dans la campagne -->
+                    <div>
+                        <label class="font-bold block mb-1">Poste occupé</label>
+                        <Dropdown v-model="newAssignment.position_id" :options="props.positions" optionLabel="name" optionValue="id" placeholder="Définir le rôle" />
                     </div>
 
                     <!-- Choix du manager (facultatif) -->
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Manager Direct (Optionnel)</label>
-                        <Dropdown v-model="newAssignment.manager_id" :options="potentialManagers" optionLabel="email" optionValue="id" filter showClear placeholder="Aucun manager" class="!rounded-xl !bg-white/50 !border-slate-100 !text-sm" />
+                    <div>
+                        <label class="font-bold block mb-1">Manager Direct (Optionnel)</label>
+                        <Dropdown v-model="newAssignment.manager_id" :options="potentialManagers" optionLabel="email" optionValue="id" filter showClear placeholder="Aucun manager" />
                     </div>
 
                     <!-- Date de début -->
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Date de début</label>
-                        <InputText type="date" v-model="newAssignment.start_date" class="!rounded-xl !bg-white/50 !border-slate-100 !text-sm" />
+                    <div>
+                        <label class="font-bold block mb-1">Date de début</label>
+                        <InputText type="date" v-model="newAssignment.start_date" />
                     </div>
                 </div>
 
                 <template #footer>
-                    <div class="flex gap-3 mt-4 w-full">
-                        <Button label="Annuler" class="flex-1 !bg-white !text-slate-500 !border-slate-100 !rounded-xl !py-3 !font-bold" @click="assignmentDialog = false" />
-                        <Button label="Confirmer l'affectation" icon="pi pi-check" class="flex-1 !bg-gradient-to-r !from-blue-600 !to-indigo-600 !border-0 !rounded-xl !py-3 !font-bold !text-white shadow-lg shadow-blue-500/20" @click="saveAssignment" />
-                    </div>
+                    <Button label="Annuler" severity="secondary" text @click="assignmentDialog = false" />
+                    <Button label="Confirmer l'affectation" icon="pi pi-check" @click="saveAssignment" />
                 </template>
             </Dialog>
 
             <!-- MODAL DE LIBÉRATION / TRANSFERT (Le cœur de la logique demandée) -->
-            <Dialog v-model:visible="releaseDialog" header="Libérer une ressource" :style="{ width: '550px' }" modal class="!rounded-[2.5rem] !bg-white/90 !backdrop-blur-xl !border-white/50 !shadow-2xl">
-                <div v-if="selectedAssignment" class="flex flex-col gap-6 pt-4">
-                    <div class="bg-blue-50/50 p-4 rounded-2xl text-blue-800 text-sm border border-blue-100 font-medium">
-                        Vous allez libérer <b class="text-blue-600">{{ selectedAssignment.employee.first_name }} {{ selectedAssignment.employee.last_name }}</b> de la campagne <b class="text-blue-600">{{ selectedAssignment.campaign.name }}</b>.
+            <Dialog v-model:visible="releaseDialog" header="Libérer une ressource" :style="{ width: '450px' }" modal class="p-fluid">
+                <div v-if="selectedAssignment" class="flex flex-col gap-4 mt-2">
+                    <div class="bg-blue-50 p-3 rounded text-blue-800 text-sm">
+                        Vous allez libérer <b>{{ selectedAssignment.employee.first_name }} {{ selectedAssignment.employee.last_name }}</b> de la campagne <b>{{ selectedAssignment.campaign.name }}</b>.
                     </div>
 
                     <!-- Options de libération -->
-                    <div class="space-y-3">
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Comment gérer ses subordonnés ?</label>
+                    <div>
+                        <label class="font-bold block mb-2">Comment gérer ses subordonnés ?</label>
                         
-                        <div class="flex flex-col gap-3">
-                            <div class="flex items-center gap-4 border border-slate-100 p-4 rounded-2xl cursor-pointer hover:bg-white/50 transition-all" @click="releaseData.mode = 'solo'" :class="{'!border-blue-500 !bg-blue-50/50': releaseData.mode === 'solo'}">
-                                <div class="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                                    <i class="pi pi-user text-blue-600"></i>
-                                </div>
+                        <div class="flex flex-col gap-2">
+                            <div class="flex items-center gap-2 border p-2 rounded cursor-pointer hover:bg-gray-50" @click="releaseData.mode = 'solo'" :class="{'border-blue-500 bg-blue-50': releaseData.mode === 'solo'}">
+                                <i class="pi pi-user"></i>
                                 <div>
-                                    <div class="font-black text-slate-800 text-sm">Libération seule</div>
-                                    <div class="text-[10px] text-slate-500 font-medium uppercase tracking-tight">Ses subordonnés restent sans manager direct.</div>
+                                    <div class="font-bold">Libération seule</div>
+                                    <div class="text-xs text-gray-500">Ses subordonnés restent sur la campagne sans manager direct.</div>
                                 </div>
                             </div>
 
-                            <div class="flex items-center gap-4 border border-slate-100 p-4 rounded-2xl cursor-pointer hover:bg-white/50 transition-all" @click="releaseData.mode = 'cascade'" :class="{'!border-rose-500 !bg-rose-50/50': releaseData.mode === 'cascade'}">
-                                <div class="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                                    <i class="pi pi-users text-rose-600"></i>
-                                </div>
+                            <div class="flex items-center gap-2 border p-2 rounded cursor-pointer hover:bg-gray-50" @click="releaseData.mode = 'cascade'" :class="{'border-red-500 bg-red-50': releaseData.mode === 'cascade'}">
+                                <i class="pi pi-users text-red-600"></i>
                                 <div>
-                                    <div class="font-black text-rose-700 text-sm">Libération en cascade</div>
-                                    <div class="text-[10px] text-rose-500 font-medium uppercase tracking-tight">Toute sa chaîne (SUP et TC) est libérée.</div>
+                                    <div class="font-bold text-red-600">Libération en cascade</div>
+                                    <div class="text-xs text-gray-500">Toute sa chaîne (SUP et TC) est également libérée de la campagne.</div>
                                 </div>
                             </div>
 
-                            <div class="flex items-center gap-4 border border-slate-100 p-4 rounded-2xl cursor-pointer hover:bg-white/50 transition-all" @click="releaseData.mode = 'transfer'" :class="{'!border-emerald-500 !bg-emerald-50/50': releaseData.mode === 'transfer'}">
-                                <div class="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                                    <i class="pi pi-sync text-emerald-600"></i>
-                                </div>
+                            <div class="flex items-center gap-2 border p-2 rounded cursor-pointer hover:bg-gray-50" @click="releaseData.mode = 'transfer'" :class="{'border-green-500 bg-green-50': releaseData.mode === 'transfer'}">
+                                <i class="pi pi-sync text-green-600"></i>
                                 <div>
-                                    <div class="font-black text-emerald-700 text-sm">Transfert de chaîne</div>
-                                    <div class="text-[10px] text-emerald-500 font-medium uppercase tracking-tight">Toute sa chaîne est rattachée à un remplaçant.</div>
+                                    <div class="font-bold text-green-600">Transfert de chaîne</div>
+                                    <div class="text-xs text-gray-500">Toute sa chaîne est rattachée à un autre responsable.</div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Choix du nouveau manager si transfert -->
-                    <div v-if="releaseData.mode === 'transfer'" class="space-y-2">
-                        <label class="text-[10px] font-black text-emerald-600 uppercase tracking-widest ml-1">Choisir le nouveau responsable</label>
-                        <Dropdown v-model="releaseData.new_manager_id" :options="potentialManagers.filter(m => m.id !== selectedAssignment.employee_id)" optionLabel="email" optionValue="id" filter placeholder="Sélectionner le remplaçant" class="!rounded-xl !bg-white/50 !border-slate-100 !text-sm" />
+                    <div v-if="releaseData.mode === 'transfer'">
+                        <label class="font-bold block mb-1 text-green-700">Choisir le nouveau responsable</label>
+                        <Dropdown v-model="releaseData.new_manager_id" :options="potentialManagers.filter(m => m.id !== selectedAssignment.employee_id)" optionLabel="email" optionValue="id" filter placeholder="Sélectionner le remplaçant" />
                     </div>
 
                     <!-- Raison du départ -->
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Motif / Commentaire</label>
-                        <InputText v-model="releaseData.reason" placeholder="Ex: Fin de contrat, mutation..." class="!rounded-xl !bg-white/50 !border-slate-100 !text-sm" />
+                    <div>
+                        <label class="font-bold block mb-1">Motif / Commentaire</label>
+                        <InputText v-model="releaseData.reason" placeholder="Ex: Fin de contrat, mutation..." />
                     </div>
                 </div>
 
                 <template #footer>
-                    <div class="flex gap-3 mt-4 w-full">
-                        <Button label="Annuler" class="flex-1 !bg-white !text-slate-500 !border-slate-100 !rounded-xl !py-3 !font-bold" @click="releaseDialog = false" />
-                        <Button label="Valider l'action" icon="pi pi-check" class="flex-1 !border-0 !rounded-xl !py-3 !font-bold !text-white shadow-lg" :class="releaseData.mode === 'cascade' ? '!bg-rose-600 shadow-rose-500/20' : '!bg-blue-600 shadow-blue-500/20'" @click="executeRelease" />
-                    </div>
+                    <Button label="Annuler" severity="secondary" text @click="releaseDialog = false" />
+                    <Button label="Valider l'action" icon="pi pi-check" :severity="releaseData.mode === 'cascade' ? 'danger' : 'primary'" @click="executeRelease" />
                 </template>
             </Dialog>
         </div>

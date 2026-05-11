@@ -10,13 +10,7 @@ import Textarea from 'primevue/textarea';
 import Menu from 'primevue/menu';
 import SelectButton from 'primevue/selectbutton';
 import ToggleSwitch from 'primevue/toggleswitch';
-import IconField from 'primevue/iconfield';
-import InputIcon from 'primevue/inputicon';
-import Select from 'primevue/select';
-import Message from 'primevue/message';
-import { FilterMatchMode } from '@primevue/core/api';
 import { useToast } from 'primevue/usetoast';
-import { useConfirm } from 'primevue/useconfirm';
 import { ref, computed } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
@@ -26,13 +20,7 @@ const props = defineProps({
     campaigns: Array, // Liste des campagnes avec assignment_count
 });
 
-// --- FILTRAGE AUTOMATIQUE PRIME VUE ---
-const filters = ref({
-    global: { value: null, matchMode: FilterMatchMode.CONTAINS },
-});
-
 const toast = useToast();
-const confirm = useConfirm();
 const dt = ref();
 
 // États pour les modaux
@@ -47,8 +35,9 @@ const menu = ref();
 const menuItems = ref([]);
 
 // Filtres
+const searchQuery = ref('');
 const statusFilter = ref('Tous');
-const statusOptions = ref(['Tous', 'Active', 'Inactive', 'Terminée']);
+const statusOptions = ref(['Tous', 'Active', 'Inactive', 'Terminee']);
 const showClosed = ref(false);
 
 /**
@@ -56,8 +45,17 @@ const showClosed = ref(false);
  */
 const filteredCampaigns = computed(() => {
     return props.campaigns.filter(c => {
-        const matchesStatus = statusFilter.value === 'Tous' || c.status.toLowerCase() === statusFilter.value.toLowerCase();
-        return matchesStatus;
+        const matchesSearch = c.name.toLowerCase().includes(searchQuery.value.toLowerCase());
+        
+        // Normalisation pour la comparaison (gestion des accents)
+        const normalize = (str) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        
+        const matchesStatus = statusFilter.value === 'Tous' || normalize(c.status) === normalize(statusFilter.value);
+        
+        const isClosed = normalize(c.status) === 'terminee';
+        const hideClosed = !showClosed.value && isClosed && normalize(statusFilter.value) !== 'terminee';
+        
+        return matchesSearch && matchesStatus && !hideClosed;
     });
 });
 
@@ -169,31 +167,16 @@ const saveCampaign = () => {
     }
 };
 
-const confirmDelete = (data) => {
-    confirm.require({
-        message: `Voulez-vous vraiment clôturer la campagne "${data.name}" ?`,
-        header: 'Confirmation de clôture',
-        icon: 'pi pi-exclamation-triangle',
-        rejectProps: {
-            label: 'Annuler',
-            severity: 'secondary',
-            variant: 'text'
-        },
-        acceptProps: {
-            label: 'Confirmer la clôture',
-            severity: 'danger'
-        },
-        accept: () => {
-            router.delete(`/campaigns/${data.id}`, {
-                onSuccess: () => {
-                    toast.add({ 
-                        severity: 'success', 
-                        summary: 'Succès', 
-                        detail: 'Campagne clôturée avec succès', 
-                        life: 3000 
-                    });
-                }
-            });
+const confirmClose = (data) => {
+    selectedCampaign.value = data;
+    deleteDialog.value = true;
+};
+
+const closeCampaign = () => {
+    router.delete(`/campaigns/${selectedCampaign.value.id}`, {
+        onSuccess: () => {
+            toast.add({ severity: 'success', summary: 'Succès', detail: 'Campagne clôturée avec succès', life: 3000 });
+            deleteDialog.value = false;
         }
     });
 };
@@ -210,42 +193,32 @@ const getStatusSeverity = (status) => {
 
 <template>
     <AppLayout>
-        <div class="space-y-6">
-            <!-- HEADER -->
-            <div class="flex justify-between items-center">
+        <div class="p-6 bg-slate-50 min-h-screen">
+            <!-- HEADER (Image 3) -->
+            <div class="flex justify-between items-center mb-6">
                 <div>
-                    <h1 class="text-3xl font-black text-slate-800 tracking-tight">Gestion des Campagnes</h1>
-                    <p class="text-slate-500 font-medium">{{ props.campaigns.length }} campagnes configurées</p>
+                    <h1 class="text-3xl font-bold text-slate-900">Campagnes</h1>
+                    <p class="text-slate-500">{{ props.campaigns.length }} campagnes au total</p>
                 </div>
-                <Button label="Nouvelle campagne" icon="pi pi-plus" class="!bg-gradient-to-r !from-blue-600 !to-indigo-600 !border-0 !rounded-2xl !px-6 !py-3 !font-black !text-xs !uppercase !tracking-widest !text-white shadow-xl shadow-blue-500/20 hover:-translate-y-0.5 transition-all" @click="openNew" />
+                <Button label="Nouvelle campagne" icon="pi pi-plus" class="!bg-blue-600 rounded-lg px-4 py-2" @click="openNew" />
             </div>
 
-            <!-- FILTRES -->
-            <div class="flex flex-wrap gap-4 items-center">
-                <IconField class="flex-1 min-w-[300px]">
-                    <InputIcon>
-                        <i class="pi pi-search" />
-                    </InputIcon>
-                    <InputText v-model="filters['global'].value" placeholder="Recherche automatique..." class="w-full !rounded-2xl !bg-white/70 !backdrop-blur-md !border-white/50 !text-sm focus:!ring-2 focus:!ring-blue-500/20" />
-                </IconField>
-                <SelectButton v-model="statusFilter" :options="statusOptions" class="!rounded-2xl overflow-hidden !border-white/50 !bg-white/50 !backdrop-blur-md" />
+            <!-- FILTRES (Image 3) -->
+            <div class="flex flex-wrap gap-4 items-center mb-6">
+                <div class="p-input-icon-left flex-1 min-w-[300px]">
+                    <InputText v-model="searchQuery" placeholder="Rechercher une campagne..." class="w-full pl-10 rounded-xl border-slate-200" />
+                </div>
+                <div class="flex items-center gap-3 bg-white px-4 py-2 rounded-xl border border-slate-100 shadow-sm">
+                    <span class="text-sm font-medium text-slate-600">Afficher les clôturées</span>
+                    <ToggleSwitch v-model="showClosed" />
+                </div>
+                <SelectButton v-model="statusFilter" :options="statusOptions" class="custom-select-button" />
             </div>
 
-            <div class="card !border-0 !shadow-2xl !shadow-slate-200/50 !rounded-[2.5rem] overflow-hidden bg-white/70 backdrop-blur-md border border-white/50">
-                <DataTable 
-                    :value="filteredCampaigns" 
-                    v-model:filters="filters"
-                    :globalFilterFields="['name', 'description', 'status']"
-                    @row-click="onRowClick" 
-                    class="p-datatable-sm cursor-pointer"
-                    paginator :rows="10"
-                    paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
-                    currentPageReportTemplate="Affichage de {first} à {last} sur {totalRecords}">
-                    <template #header>
-                        <div class="flex justify-between items-center py-4 px-6 bg-white/30">
-                            <span class="text-slate-800 font-black uppercase tracking-widest text-xs">Liste des campagnes</span>
-                        </div>
-                    </template>
+            <!-- TABLEAU (Image 3) -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                <DataTable :value="filteredCampaigns" class="p-datatable-custom cursor-pointer" responsiveLayout="stack" 
+                    @row-click="onRowClick" rowHover >
                     <Column field="name" header="Nom" sortable>
                         <template #body="slotProps">
                             <span class="font-bold text-slate-900 hover:text-blue-600 transition-colors">
@@ -288,40 +261,53 @@ const getStatusSeverity = (status) => {
             </div>
 
             <!-- MODAL CRÉATION/EDITION -->
-            <Dialog v-model:visible="campaignDialog" :header="campaign.id ? 'Modifier la campagne' : 'Nouvelle campagne'" modal class="!rounded-[2.5rem] !bg-white/90 !backdrop-blur-xl !border-white/50 !shadow-2xl" :style="{width: '550px'}">
-                <div class="flex flex-col gap-6 pt-4">
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nom de la campagne *</label>
-                        <InputText v-model="campaign.name" placeholder="Ex: Campagne Highfive" class="!rounded-xl !bg-white/50 !border-slate-100 !text-sm focus:!ring-2 focus:!ring-blue-500/20" :class="{'p-invalid': submitted && !campaign.name}" />
+            <Dialog v-model:visible="campaignDialog" :header="campaign.id ? 'Modifier la campagne' : 'Nouvelle campagne'" modal class="p-fluid rounded-2xl" :style="{width: '500px'}">
+                <div class="flex flex-col gap-4 mt-2">
+                    <div>
+                        <label class="font-semibold block mb-1">Nom de la campagne *</label>
+                        <InputText v-model="campaign.name" placeholder="Ex: Campagne Highfive" :class="{'p-invalid': submitted && !campaign.name}" />
                     </div>
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Description</label>
-                        <Textarea v-model="campaign.description" rows="3" placeholder="Objectifs et détails..." class="!rounded-xl !bg-white/50 !border-slate-100 !text-sm focus:!ring-2 focus:!ring-blue-500/20" />
+                    <div>
+                        <label class="font-semibold block mb-1">Description</label>
+                        <Textarea v-model="campaign.description" rows="3" placeholder="Objectifs et détails..." />
                     </div>
                     <div class="grid grid-cols-2 gap-4">
-                        <div class="space-y-2">
-                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Date début *</label>
-                            <InputText type="date" v-model="campaign.start_date" class="!rounded-xl !bg-white/50 !border-slate-100 !text-sm" />
+                        <div>
+                            <label class="font-semibold block mb-1">Date début *</label>
+                            <InputText type="date" v-model="campaign.start_date" />
                         </div>
-                        <div class="space-y-2">
-                            <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Date fin</label>
-                            <InputText type="date" v-model="campaign.end_date" class="!rounded-xl !bg-white/50 !border-slate-100 !text-sm" />
+                        <div>
+                            <label class="font-semibold block mb-1">Date fin</label>
+                            <InputText type="date" v-model="campaign.end_date" />
                         </div>
                     </div>
-                    <div class="space-y-3">
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Statut de la campagne</label>
-                        <div class="flex gap-3">
-                            <Button label="Active" :outlined="campaign.status !== 'active'" class="flex-1 !rounded-xl !py-2.5 !font-black !text-[10px] !uppercase !tracking-widest" @click="campaign.status = 'active'" severity="success" />
-                            <Button label="Inactive" :outlined="campaign.status !== 'inactive'" class="flex-1 !rounded-xl !py-2.5 !font-black !text-[10px] !uppercase !tracking-widest" @click="campaign.status = 'inactive'" severity="warn" />
-                            <Button label="Terminée" :outlined="campaign.status !== 'terminee'" class="flex-1 !rounded-xl !py-2.5 !font-black !text-[10px] !uppercase !tracking-widest" @click="campaign.status = 'terminee'" severity="secondary" />
+                    <div>
+                        <label class="font-semibold block mb-2">Statut</label>
+                        <div class="flex gap-2">
+                            <Button label="Active" :outlined="campaign.status !== 'active'" rounded @click="campaign.status = 'active'" severity="success" size="small" />
+                            <Button label="Inactive" :outlined="campaign.status !== 'inactive'" rounded @click="campaign.status = 'inactive'" severity="warn" size="small" />
+                            <Button label="Terminée" :outlined="campaign.status !== 'terminee'" rounded @click="campaign.status = 'terminee'" severity="secondary" size="small" />
                         </div>
                     </div>
                 </div>
                 <template #footer>
-                    <div class="flex gap-3 mt-4">
-                        <Button label="Annuler" class="flex-1 !bg-white !text-slate-500 !border-slate-100 !rounded-xl !py-3 !font-bold" @click="campaignDialog = false" />
-                        <Button label="Enregistrer" icon="pi pi-check" class="flex-1 !bg-gradient-to-r !from-blue-600 !to-indigo-600 !border-0 !rounded-xl !py-3 !font-bold !text-white shadow-lg shadow-blue-500/20" @click="saveCampaign" />
+                    <Button label="Annuler" severity="secondary" text @click="campaignDialog = false" />
+                    <Button label="Enregistrer" icon="pi pi-check" @click="saveCampaign" class="px-4" />
+                </template>
+            </Dialog>
+
+            <!-- MODAL SUPPRESSION (CLÔTURE) -->
+            <Dialog v-model:visible="deleteDialog" header="Confirmation de clôture" modal :style="{width: '400px'}">
+                <div class="flex items-center gap-3">
+                    <i class="pi pi-exclamation-triangle text-red-500 text-3xl" />
+                    <div class="flex flex-col">
+                        <span>Voulez-vous clôturer la campagne <b>{{ selectedCampaign?.name }}</b> ?</span>
+                        <span class="text-sm text-slate-500 mt-2 italic">Cette action desaffectera toutes les ressources.".</span>
                     </div>
+                </div>
+                <template #footer>
+                    <Button label="Annuler" severity="secondary" text @click="deleteDialog = false" />
+                    <Button label="Confirmer la clôture" severity="danger" @click="closeCampaign" />
                 </template>
             </Dialog>
         </div>

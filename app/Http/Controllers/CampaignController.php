@@ -3,9 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Campaign;
-use App\Models\ActivityLog; // Importation du modèle ActivityLog pour l'historique
+use App\Models\ActivityLog;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth; // Importation de Auth pour récupérer l'utilisateur connecté
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class CampaignController extends Controller
@@ -19,7 +20,7 @@ class CampaignController extends Controller
         $campaigns = Campaign::withCount(['assignments' => function ($query) {
             $query->where('status', 'actif');
         }])->latest()->get();
-        
+
         // Retourne la vue de la liste des campagnes (Image 3)
         return Inertia::render('Campaigns/Index', [
             'campaigns' => $campaigns,
@@ -100,8 +101,8 @@ class CampaignController extends Controller
             'ip_address' => $request->ip(), // Adresse IP de l'utilisateur
         ]);
 
-        // Redirection vers l'index avec un message de succès
-        return redirect()->back();
+        // Redirection vers la page de détail pour commencer les affectations
+        return redirect()->route('campaigns.show', $campaign->id)->with('success', 'Campagne créée avec succès. Vous pouvez maintenant affecter des ressources.');
     }
 
     /**
@@ -121,11 +122,19 @@ class CampaignController extends Controller
             ->latest()
             ->get();
 
+        // Employés disponibles (non affectés à une campagne active)
+        $availableEmployees = \App\Models\Employee::where('status', 'actif')
+            ->whereDoesntHave('assignments', function ($q) {
+                $q->where('status', 'actif');
+            })
+            ->with('position')
+            ->get();
+
         return Inertia::render('Campaigns/Show', [
             'campaign' => $campaign,
             'assignments' => $campaign->assignments,
             'history' => $history,
-            'employees' => \App\Models\Employee::where('status', 'actif')->get(),
+            'availableEmployees' => $availableEmployees,
             'positions' => \App\Models\Position::all()
         ]);
     }
@@ -182,7 +191,7 @@ class CampaignController extends Controller
 
         // Sauvegarde de l'ancien statut pour la description
         $oldStatus = $campaign->status;
-        
+
         // Mise à jour du statut
         $campaign->update(['status' => $validated['status']]);
 
@@ -207,21 +216,46 @@ class CampaignController extends Controller
         // On garde l'ancien statut
         $oldStatus = $campaign->status;
 
-        // On ne supprime pas physiquement, on change le statut en 'terminee'
-        $campaign->update(['status' => 'terminee']);
+        DB::transaction(function () use ($campaign, $oldStatus, $request) {
+            // 1. On change le statut en 'terminee'
+            $campaign->update(['status' => 'terminee']);
 
-        // je vais ecrire une methode pour liberer automatiquement toute les resources de cette campagnes
+            // 2. On libère automatiquement toutes les ressources de cette campagne
+            $activeAssignments = \App\Models\Assignment::where('campaign_id', $campaign->id)
+                ->where('status', 'actif')
+                ->with(['employee', 'position'])
+                ->get();
 
-        // Enregistrement de la clôture (via bouton supprimer) dans l'historique
-        ActivityLog::create([
-            'user_id' => Auth::id(),
-            'action' => 'cloture_campagne', // Action plus explicite
-            'model_type' => Campaign::class,
-            'model_id' => $campaign->id,
-            'description' => "Campagne clôturée : {$campaign->name}. Ancien statut: {$oldStatus}",
-            'ip_address' => $request->ip(),
-        ]);
+            foreach ($activeAssignments as $assignment) {
+                // Terminer l'affectation
+                $assignment->update([
+                    'status' => 'termine',
+                    'end_date' => now(),
+                ]);
 
-        return redirect()->back();
+                // Créer une trace dans l'historique
+                \App\Models\AssignmentHistory::create([
+                    'assignment_id'   => $assignment->id,
+                    'employee_id'     => $assignment->employee_id,
+                    'old_manager_id'  => $assignment->manager_id,
+                    'old_campaign_id' => $assignment->campaign_id,
+                    'action_type'     => 'release',
+                    'changed_by'      => Auth::id(),
+                    'reason'          => "Libération automatique suite à la clôture de la campagne : {$campaign->name}",
+                ]);
+            }
+
+            // 3. Enregistrement de la clôture dans le journal d'activité
+            ActivityLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'cloture_campagne',
+                'model_type' => Campaign::class,
+                'model_id' => $campaign->id,
+                'description' => "Campagne clôturée : {$campaign->name}. Toutes les ressources ont été libérées automatiquement.",
+                'ip_address' => $request->ip(),
+            ]);
+        });
+
+        return redirect()->back()->with('success', 'Campagne clôturée et ressources libérées.');
     }
 }

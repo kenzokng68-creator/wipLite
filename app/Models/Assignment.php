@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-#[Fillable(['employee_id', 'campaign_id', 'manager_id',
+#[Fillable(['employee_id', 'campaign_id', 'manager_id', 
         'position_id', 'status', 'start_date', 'end_date'])]
 class Assignment extends Model
 {
@@ -30,8 +30,4 @@ class Assignment extends Model
         return $this->belongsTo(Position::class);
     }
 
-    public function logs()
-    {
-        return $this->morphMany(ActivityLog::class, 'model');
-    }
 }
