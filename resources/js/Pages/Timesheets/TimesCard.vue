@@ -229,29 +229,6 @@ const handleCheckOutInput = (event) => {
     input.setSelectionRange(newPos, newPos);
   }, 0);
 };
-
-/**
- * CALCUL DYNAMIQUE DE LA DURÉE DE TRAVAIL
- */
-const computedTotalHours = computed(() => {
-  if (!form.check_in || !form.check_out) return "0.0";
-  
-  const inHours = form.check_in.getHours();
-  const inMinutes = form.check_in.getMinutes();
-  const outHours = form.check_out.getHours();
-  const outMinutes = form.check_out.getMinutes();
-
-  const totalInMinutes = inHours * 60 + inMinutes;
-  const totalOutMinutes = outHours * 60 + outMinutes;
-
-  let diffMinutes = totalOutMinutes - totalInMinutes;
-  if (form.break_duration) {
-    diffMinutes -= parseInt(form.break_duration);
-  }
-
-  const hours = Math.max(0, diffMinutes / 60);
-  return hours.toFixed(1);
-});
 </script>
 
 <template>
@@ -328,12 +305,6 @@ const computedTotalHours = computed(() => {
         type="number"
         :disabled="isLocked"
       />
-    </div>
-
-    <!-- AFFICHAGE DURÉE CALCULÉE -->
-    <div class="mt-2 p-3 bg-slate-50 rounded-xl border border-dashed border-slate-200 flex justify-between items-center">
-      <span class="text-[10px] font-black uppercase text-slate-400">Durée estimée :</span>
-      <span class="text-lg font-black text-blue-600">{{ computedTotalHours }}h</span>
     </div>
 
     <!-- ACTIONS -->

@@ -20,32 +20,32 @@ class TimesheetController extends Controller
     {
         $user = auth()->user();
         $employee = $user->employee;
-        $role = strtoupper($user->role->name); // Normalisation pour faciliter les tests
+        $role = strtolower($user->role->name);
 
-        // Chargement des relations nécessaires pour éviter le problème "N+1 queries"
+        // Chargement des relations nécessaires
         $query = Timesheet::with(['employee', 'validator', 'entries']);
 
-        // --- FILTRAGE DE SÉCURITÉ ---
-        if ($role === 'ADMIN') {
-            // L'ADMIN voit l'intégralité des données sans restriction
+        // --- LOGIQUE DE FILTRAGE HIÉRARCHIQUE ---
+        if ($role === 'admin') {
+            // L'ADMIN voit tout
         } 
-        elseif ($role === 'SUP' || $role === 'CP') {
-            // Sécurité : Si le manager n'a pas de profil employé, on retourne une liste vide
-            if (!$employee) {
-                return Inertia::render('Timesheets/Calendar', ['calendar' => []]);
-            }
-
-            // Filtre : Un manager ne voit que les employés qui lui sont assignés activement
+        elseif ($role === 'cp') {
+            // Le CP voit ses Superviseurs assignés
+            // On cherche les employés dont le manager est ce CP
             $query->whereHas('employee.assignments', function ($q) use ($employee) {
                 $q->where('manager_id', $employee->id)
                   ->where('status', 'actif');
             });
         } 
-        elseif ($role === 'TC') {
-            if (!$employee) {
-                return Inertia::render('Timesheets/Calendar', ['calendar' => []]);
-            }
-            // Filtre : Le Téléconseiller ne voit que ses propres pointages
+        elseif ($role === 'sup') {
+            // Le SUP voit ses Téléconseillers assignés
+            $query->whereHas('employee.assignments', function ($q) use ($employee) {
+                $q->where('manager_id', $employee->id)
+                  ->where('status', 'actif');
+            });
+        } 
+        elseif ($role === 'tc') {
+            // Le TC ne voit que lui-même
             $query->where('employee_id', $employee->id);
         }
 

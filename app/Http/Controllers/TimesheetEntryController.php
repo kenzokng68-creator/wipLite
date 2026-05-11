@@ -29,57 +29,71 @@ class TimesheetEntryController extends Controller
     public function store(StoreTimesheetEntryRequest $request)
     {
         $validated = $request->validated();
+        $timesheetIds = $request->input('timesheet_ids', [$validated['timesheet_id']]);
 
-        // Récupération dynamique des heures prévues (planned_hours)
-        $date = Carbon::parse($validated['date']);
-        $dayName = strtolower($date->format('l')); // e.g., 'monday'
-        $columnName = $dayName . '_hours'; // e.g., 'monday_hours'
+        foreach ($timesheetIds as $tsId) {
+            // Récupération dynamique des heures prévues (planned_hours)
+            $date = Carbon::parse($validated['date']);
+            $dayName = strtolower($date->format('l')); // e.g., 'monday'
+            $columnName = $dayName . '_hours'; // e.g., 'monday_hours'
 
-        // On cherche l'employé via le timesheet
-        $timesheet = Timesheet::findOrFail($validated['timesheet_id']);
+            // On cherche l'employé via le timesheet
+            $timesheet = Timesheet::findOrFail($tsId);
 
-        // On cherche le planning actif pour cet employé à cette date
-        $assignment = PlanningAssignment::where('employee_id', $timesheet->employee_id)
-            ->where('start_date', '<=', $validated['date'])
-            ->where(function ($q) use ($validated) {
-                $q->where('end_date', '>=', $validated['date'])
-                    ->orWhereNull('end_date');
-            })
-            ->where('status', 'validé')
-            ->with('planningModel')
-            ->first();
+            // On cherche le planning actif pour cet employé à cette date
+            $assignment = PlanningAssignment::where('employee_id', $timesheet->employee_id)
+                ->where('start_date', '<=', $validated['date'])
+                ->where(function ($q) use ($validated) {
+                    $q->where('end_date', '>=', $validated['date'])
+                        ->orWhereNull('end_date');
+                })
+                ->where('status', 'validé')
+                ->with('planningModel')
+                ->first();
 
-        // Si on trouve un planning, on prend les heures prévues, sinon 0
-        $validated['planned_hours'] = $assignment ? $assignment->planningModel->$columnName : 0;
+            // Si on trouve un planning, on prend les heures prévues, sinon 0
+            $plannedHours = $assignment ? (float)$assignment->planningModel->$columnName : 0.0;
 
-        // Calcul de la durée de travail (total_hours)
-        if (!empty($validated['check_in']) && !empty($validated['check_out'])) {
-            $start = Carbon::parse($validated['check_in']);
-            $end = Carbon::parse($validated['check_out']);
-            $diffInMinutes = $start->diffInMinutes($end);
-            $validated['total_hours'] = max(0, ($diffInMinutes - ($validated['break_duration'] ?? 0)) / 60);
+            // Calcul de la durée de travail (total_hours)
+            $totalHours = 0.0;
+            $overtimeHours = 0.0;
 
-            // Calcul des heures supplémentaires (overtime_hours)
-            $validated['overtime_hours'] = max(0, $validated['total_hours'] - $validated['planned_hours']);
-        } else {
-            $validated['total_hours'] = 0;
-            $validated['overtime_hours'] = 0;
+            if (!empty($validated['check_in']) && !empty($validated['check_out'])) {
+                $start = Carbon::parse($validated['check_in']);
+                $end = Carbon::parse($validated['check_out']);
+                $diffInMinutes = $start->diffInMinutes($end);
+
+                // Durée = (Sortie - Arrivée - Pause) / 60
+                $workMinutes = $diffInMinutes - (int)($validated['break_duration'] ?? 0);
+                $totalHours = max(0, $workMinutes / 60);
+
+                // Calcul des heures supplémentaires (écarts)
+                $overtimeHours = $totalHours - $plannedHours;
+            }
+
+            $entry = TimesheetEntry::updateOrCreate(
+                [
+                    'timesheet_id' => $tsId,
+                    'date' => $validated['date'],
+                ],
+                [
+                    'check_in' => $validated['check_in'],
+                    'check_out' => $validated['check_out'],
+                    'break_duration' => $validated['break_duration'] ?? 0,
+                    'total_hours' => $totalHours,
+                    'planned_hours' => $plannedHours,
+                    'overtime_hours' => $overtimeHours,
+                    'comment' => $validated['comment'] ?? null,
+                ]
+            );
+
+            // Mettre à jour le statut de la feuille de temps parente
+            if ($timesheet->status === 'brouillon') {
+                $timesheet->update(['status' => 'valide']);
+            }
         }
 
-        $entry = TimesheetEntry::updateOrCreate(
-            [
-                'timesheet_id' => $validated['timesheet_id'],
-                'date' => $validated['date'],
-            ],
-            $validated
-        );
-
-        // Mettre à jour le statut de la feuille de temps parente
-        if ($entry->timesheet) {
-            $entry->timesheet->update(['status' => 'valide']);
-        }
-
-        return redirect()->back()->with('success', 'Entrée enregistrée et validée avec succès.');
+        return redirect()->back()->with('success', 'Entrée(s) enregistrée(s) avec succès.');
     }
 
     /**

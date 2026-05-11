@@ -65,12 +65,18 @@ const formatHeader = (d) => new Intl.DateTimeFormat("fr-FR", { weekday: "short",
  * Vérifie si un employé possède des heures enregistrées pour une date précise.
  */
 const getEntry = (entries, date) => {
-    // Normalise la date recherchée et compare exactement avec la date de l'entrée
-    const normalizedDate = date.split('T')[0]; // S'assure que c'est YYYY-MM-DD
-    const found = entries?.find(e => {
-        const entryDate = e.date.split('T')[0]; // Normalise aussi la date de l'entrée
-        return entryDate === normalizedDate;
+    if (!entries) return { is_empty: true };
+    
+    // Normalise la date recherchée (YYYY-MM-DD)
+    const searchDate = date.split('T')[0];
+    
+    const found = entries.find(e => {
+        if (!e.date) return false;
+        // Normalise la date de l'entrée (YYYY-MM-DD)
+        const entryDate = (typeof e.date === 'string') ? e.date.split('T')[0] : new Date(e.date).toISOString().split('T')[0];
+        return entryDate === searchDate;
     });
+    
     return found ? { ...found, is_empty: false } : { is_empty: true };
 };
 
@@ -99,6 +105,7 @@ const getCellClass = (timesheet, date) => {
  * Prépare les données de l'employé et du jour sélectionné avant d'ouvrir le modal.
  */
 const openTimeCard = (timesheet, date) => {
+    const entry = getEntry(timesheet.entries, date);
     selectedData.value = {
         timesheet_id: timesheet.id,
         status: timesheet.status,
@@ -106,7 +113,7 @@ const openTimeCard = (timesheet, date) => {
         employee_name: `${timesheet.employee.first_name} ${timesheet.employee.last_name}`,
         date: date,
         // On passe l'entrée existante si elle existe, sinon null
-        entry: timesheet.entries.find(e => e.date.startsWith(date)) || null
+        entry: entry.is_empty ? null : entry
     };
     displayModal.value = true;
 };
@@ -198,73 +205,27 @@ const validateTimeEntry = (checkIn, checkOut, breakDuration = 0) => {
 
 /**
  * CALCUL DES TOTALS HEBDOMADAIRES
- * Addition simple : lundi + mardi + mercredi + jeudi + vendredi + samedi + dimanche
- * Les jours sans heures comptent comme 0h00
+ * Addition STRICTE des heures réelles affichées dans les cases
  */
 const getTotalsData = (timesheet) => {
     if (!timesheet?.entries?.length) return { worked: 0, planned: 0 };
     
-    // Récupère les dates de la période courante
-    const periodStart = props.calendar[0]?.period_start;
-    const periodEnd = props.calendar[0]?.period_end;
-    
-    if (!periodStart || !periodEnd) return { worked: 0, planned: 0 };
-    
-    // Filtre les entrées par période et évite les doublons avec un Set
-    const uniqueDates = new Set();
-    const validEntries = timesheet.entries.filter(entry => {
-        // Normalise la date de l'entrée
-        const entryDate = entry.date.split('T')[0];
-        
-        // Vérifie si la date est dans la période
-        const isInPeriod = entryDate >= periodStart && entryDate <= periodEnd;
-        
-        // Évite les doublons pour la même date
-        if (!isInPeriod || uniqueDates.has(entryDate)) return false;
-        
-        uniqueDates.add(entryDate);
-        return true;
-    });
-    
-    // Addition simple de chaque jour
     let totalWorked = 0;
     let totalPlanned = 0;
     
-    validEntries.forEach(entry => {
-        // Heures prévues : utilise planning_hours ou planned_hours, 0 si pas de valeur
-        const planned = parseFloat(entry.planning_hours) || parseFloat(entry.planned_hours) || 0;
-        totalPlanned += planned;
-        
-        // Heures travaillées : calcul simple ou 0 si pas de données
-        let dayWorked = 0;
-        
-        if (entry.check_in && entry.check_out) {
-            // Calcul simple : (sortie - entrée) - pause
-            const [inHours, inMinutes] = entry.check_in.split(':').map(Number);
-            const [outHours, outMinutes] = entry.check_out.split(':').map(Number);
-            
-            const inTotalMinutes = inHours * 60 + inMinutes;
-            const outTotalMinutes = outHours * 60 + outMinutes;
-            
-            let workMinutes = outTotalMinutes - inTotalMinutes;
-            
-            // Soustraction de la pause
-            if (entry.break_duration) {
-                workMinutes -= parseInt(entry.break_duration);
-            }
-            
-            dayWorked = Math.max(0, workMinutes / 60);
-        } else {
-            // Si pas d'horaires, utilise total_hours ou 0
-            dayWorked = parseFloat(entry.total_hours) || 0;
+    // On utilise les dates de la période pour être sûr de ce qu'on calcule
+    periodDates.value.forEach(dateStr => {
+        const entry = getEntry(timesheet.entries, dateStr);
+        if (!entry.is_empty) {
+            // Additionner les heures réelles stockées
+            totalWorked += parseFloat(entry.total_hours || 0);
+            // Additionner les heures prévues stockées
+            totalPlanned += parseFloat(entry.planned_hours || 0);
         }
-        
-        // Addition simple au total
-        totalWorked += dayWorked;
     });
     
     return {
-        worked: Math.round(totalWorked * 100) / 100, // Arrondi à 2 décimales
+        worked: Math.round(totalWorked * 100) / 100,
         planned: Math.round(totalPlanned * 100) / 100
     };
 };
@@ -335,11 +296,6 @@ const calculateTotals = (timesheet) => {
                             icon="pi pi-users" 
                             class="p-button-raised p-button-help p-button-sm font-bold border-0 shadow-lg shadow-purple-200/50" 
                             @click="openBulkEdit" />
-                    
-                    <Button label="Nouveau Téléconseiller" 
-                            icon="pi pi-user-plus" 
-                            class="p-button-raised p-button-primary p-button-sm font-bold border-0 shadow-lg shadow-blue-200/50" 
-                            @click="router.visit('/employees/create')" />
                 </div>
             </div>
 
@@ -387,56 +343,47 @@ const calculateTotals = (timesheet) => {
                 <!-- Colonnes jours (Cellules colorées harmonieuses) -->
                 <Column v-for="date in periodDates" :key="date" :header="formatHeader(date)" class="text-center border-b border-slate-50 bg-white">
                     <template #body="{ data: timesheet }">
-                        <button
-                            class="w-full h-full p-2 border rounded text-left hover:bg-gray-50 transition min-h-[50px]"
-                            @click="openTimesCard(timesheet, date)"
+                        <div
+                            :class="[
+                                getCellClass(timesheet, date),
+                                'm-1 p-2 rounded-xl border cursor-pointer transition-all hover:shadow-md min-h-[60px] flex flex-col items-center justify-center'
+                            ]"
+                            @click="openTimeCard(timesheet, date)"
                         >
-                            <section
-                                v-if="getEntryByDate(timesheet, date)"
-                                class="cell-content"
-                            >
-                                <div class="flex flex-col">
-                                    <span class="text-xs font-bold text-blue-600">
-                                        {{
-                                            getEntryByDate(timesheet, date)
-                                                .total_hours
-                                        }}h
-                                    </span>
-                                    <span class="text-[10px] text-gray-500">
-                                        {{
-                                            getEntryByDate(
-                                                timesheet,
-                                                date,
-                                            ).check_in?.substring(0, 5) || "00:00"
-                                        }}
-                                        -
-                                        {{
-                                            getEntryByDate(
-                                                timesheet,
-                                                date,
-                                            ).check_out?.substring(0, 5) || "00:00"
-                                        }}
-                                    </span>
-                                </div>
-                            </section>
-                            <section
-                                v-else
-                                class="cell-content flex items-center justify-center"
-                            >
-                                <span class="text-xs text-gray-300 italic">Brouillon</span>
-                            </section>
-                        </button>
+                            <template v-if="!getEntry(timesheet.entries, date).is_empty">
+                                <span class="text-xs font-black">
+                                    {{ getEntry(timesheet.entries, date).total_hours }}h
+                                </span>
+                            </template>
+                            <template v-else>
+                                <span class="text-[10px] opacity-30 italic font-bold">--:--</span>
+                            </template>
+                        </div>
+                    </template>
+                </Column>
+
+                <!-- NOUVELLE COLONNE : STATUT -->
+                <Column header="Statut" class="text-center border-b border-slate-50 bg-white" style="min-width: 100px">
+                    <template #body="{ data }">
+                        <span :class="[
+                            'px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shadow-sm border',
+                            data.status === 'soumis' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
+                            data.status === 'valide' ? 'bg-blue-50 text-blue-600 border-blue-100' : 
+                            'bg-slate-50 text-slate-500 border-slate-200'
+                        ]">
+                            {{ data.status }}
+                        </span>
                     </template>
                 </Column>
 
                 <Column header="Total" class="text-right font-bold">
                     <template #body="{ data }">
-                        <div class="flex flex-col items-end">
-                            <span class="text-blue-700">
-                                {{ calculateTotals(data).worked }}h
+                        <div class="flex flex-col items-end px-2">
+                            <span class="text-blue-700 text-sm font-black">
+                                {{ getTotalsData(data).worked }}h
                             </span>
-                            <span class="text-[10px] text-gray-400">
-                                Prévu: {{ calculateTotals(data).planned }}h
+                            <span class="text-[9px] text-slate-400 font-bold uppercase">
+                                Prévu: {{ getTotalsData(data).planned }}h
                             </span>
                         </div>
                     </template>
