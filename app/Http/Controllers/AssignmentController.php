@@ -299,6 +299,32 @@ class AssignmentController extends Controller
     }
 
     /**
+     * Enregistre une nouvelle affectation
+     */
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'employee_id' => 'required|exists:employees,id',
+            'campaign_id' => 'required|exists:campaigns,id',
+            'position_id' => 'required|exists:positions,id',
+            'manager_id'  => 'nullable|exists:employees,id',
+            'start_date'  => 'required|date|after_or_equal:today',
+            'end_date'    => 'nullable|date|after_or_equal:start_date',
+        ]);
+
+        // Désactiver les anciennes affectations actives pour cet employé
+        Assignment::where('employee_id', $validated['employee_id'])
+            ->where('status', 'actif')
+            ->update(['status' => 'terminé', 'end_date' => now()]);
+
+        $assignment = Assignment::create(array_merge($validated, [
+            'status' => 'actif'
+        ]));
+
+        return back()->with('success', 'Affectation réussie');
+    }
+
+    /**
      * =========================================================
      * PAGE D'AFFECTATION DES SUPERVISEURS
      * =========================================================

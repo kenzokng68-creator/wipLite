@@ -7,7 +7,7 @@ import Column from "primevue/column";
 import Tag from "primevue/tag";
 import Button from "primevue/button";
 import Checkbox from "primevue/checkbox";
-import { UserPlus, Clock, Calendar, CheckCircle, AlertCircle, PauseCircle, XCircle } from "lucide-vue-next";
+import { UserPlus, Clock, Calendar, CheckCircle, AlertCircle } from "lucide-vue-next";
 
 const props = defineProps({
     pendingAssignments: Array,
@@ -27,14 +27,6 @@ const getStatusLabel = (status) => {
 
 const validateAssignment = (id) => {
     router.post(route('planning.assignments.validate', id));
-};
-
-const suspendAssignment = (id) => {
-    router.post(route('planning.assignments.suspend', id));
-};
-
-const terminateAssignment = (id) => {
-    router.post(route('planning.assignments.terminate', id));
 };
 
 const bulkValidate = () => {
@@ -142,20 +134,6 @@ const validateAll = () => {
                                 >
                                     <CheckCircle class="w-3 h-3" />
                                     Valider
-                                </Button>
-                                <Button
-                                    @click="suspendAssignment(data.id)"
-                                    class="!bg-amber-600 !border-none !text-white !px-2.5 !py-1.5 !text-[10px] !font-bold !rounded-lg flex items-center gap-1"
-                                >
-                                    <PauseCircle class="w-3 h-3" />
-                                    Suspendre
-                                </Button>
-                                <Button
-                                    @click="terminateAssignment(data.id)"
-                                    class="!bg-red-600 !border-none !text-white !px-2.5 !py-1.5 !text-[10px] !font-bold !rounded-lg flex items-center gap-1"
-                                >
-                                    <XCircle class="w-3 h-3" />
-                                    Terminer
                                 </Button>
                             </div>
                         </template>

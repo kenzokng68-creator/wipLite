@@ -5,10 +5,10 @@ import { ArrowLeft, Save } from 'lucide-vue-next';
 
 const props = defineProps({
   roles: Array,
+  employees: Array,
 });
 
 const form = useForm({
-  name: '',
   email: '',
   password: '',
   role_id: '',
@@ -44,24 +44,16 @@ const handleSubmit = () => {
       <div class="bg-white/80 backdrop-blur-lg rounded-2xl shadow-lg border border-blue-100/50 p-8">
         <form @submit.prevent="handleSubmit" class="space-y-6">
           <div>
-            <label class="block text-sm font-semibold text-slate-700 mb-2">Nom complet</label>
-            <input
-              v-model="form.name"
-              type="text"
-              class="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white/50 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-              placeholder="Nom et prénom"
-            />
-            <div v-if="form.errors.name" class="text-red-500 text-sm mt-1">{{ form.errors.name }}</div>
-          </div>
-
-          <div>
-            <label class="block text-sm font-semibold text-slate-700 mb-2">Email</label>
-            <input
+            <label class="block text-sm font-semibold text-slate-700 mb-2">Choisir un employé (Email)</label>
+            <select
               v-model="form.email"
-              type="email"
               class="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white/50 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-              placeholder="email@exemple.com"
-            />
+            >
+              <option value="">Sélectionner un employé</option>
+              <option v-for="emp in employees" :key="emp.id" :value="emp.email">
+                {{ emp.last_name }} {{ emp.first_name }} ({{ emp.email }})
+              </option>
+            </select>
             <div v-if="form.errors.email" class="text-red-500 text-sm mt-1">{{ form.errors.email }}</div>
           </div>
 

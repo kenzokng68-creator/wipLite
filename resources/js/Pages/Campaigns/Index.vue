@@ -30,6 +30,8 @@ const selectedCampaign = ref(null);
 const campaign = ref({ status: 'inactive' });
 const submitted = ref(false);
 
+const today = new Date().toISOString().split('T')[0];
+
 // Menu contextuel
 const menu = ref();
 const menuItems = ref([]);
@@ -274,11 +276,11 @@ const getStatusSeverity = (status) => {
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="font-semibold block mb-1">Date début *</label>
-                            <InputText type="date" v-model="campaign.start_date" />
+                            <InputText type="date" v-model="campaign.start_date" :min="campaign.id ? undefined : today" />
                         </div>
                         <div>
                             <label class="font-semibold block mb-1">Date fin</label>
-                            <InputText type="date" v-model="campaign.end_date" />
+                            <InputText type="date" v-model="campaign.end_date" :min="campaign.start_date || today" />
                         </div>
                     </div>
                     <div>

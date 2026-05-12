@@ -130,8 +130,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('campaigns', CampaignController::class);
 
     // --- FEUILLES DE TEMPS (TIMESHEETS) ---
-    Route::get('/timesheets', [TimesheetController::class, 'index'])->name('calendar.index');
+    Route::get('/timesheets', [TimesheetController::class, 'index'])->name('timesheets.index');
     Route::prefix('timesheets')->name('timesheets.')->group(function () {
+        Route::get('/entry', [TimesheetController::class, 'entry'])->name('entry');
         Route::get('/validate', [TimesheetController::class, 'index'])->name('validate');
         Route::get('/history', [TimesheetController::class, 'index'])->name('history');
         Route::get('/gaps', [TimesheetController::class, 'index'])->name('gaps');
@@ -139,7 +140,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/{timesheet}', [TimesheetController::class, 'show'])->name('show');
         Route::post('/{timesheet}/submit', [TimesheetController::class, 'submit'])->name('submit');
     });
-    Route::post('/timesheet-entries', [TimesheetEntryController::class, 'store'])->name('timesheet-entries.store');
+    Route::post('/timesheet-entries', [TimesheetEntryController::class, 'store'])->name('timesheets.store');
 
     // --- PROFIL & NOTIFICATIONS ---
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

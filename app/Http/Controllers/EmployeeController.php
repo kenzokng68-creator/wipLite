@@ -19,39 +19,26 @@ class EmployeeController extends Controller
     {
         $query = Employee::with('position', 'user');
 
-        // Filtrage selon la route
-        $routeName = $request->route()->getName();
-
-        if ($routeName === 'employees.assigned') {
-            $query->whereHas('assignments', fn($q) => $q->where('status', 'actif'));
-        } elseif ($routeName === 'employees.unassigned') {
-            $query->whereDoesntHave('assignments', fn($q) => $q->where('status', 'actif'));
-        } elseif ($routeName === 'employees.inactifs') {
-            $query->where('status', 'inactif');
-        }
-
         // Recherche globale
         if ($request->filled('search')) {
-            $search = $request->input('search');
-            $query->where(function($q) use ($search) {
-                $q->where('first_name', 'like', "%{$search}%")
-                  ->orWhere('last_name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('matricule', 'like', "%{$search}%");
-            });
+            $query->search($request->input('search'));
         }
 
-        // Filtre manuel par statut si présent
+        // Filtre par statut
         if ($request->filled('status')) {
-            $query->where('status', $request->status);
+            $query->status($request->input('status'));
         }
 
-        // Tri et Pagination
+        // Filtre par poste
+        if ($request->filled('position_id')) {
+            $query->byPosition($request->input('position_id'));
+        }
         $sortField = $request->input('sort_field', 'last_name');
         $sortOrder = $request->input('sort_order', 'asc');
         $perPage = $request->input('per_page', 10);
 
-        $employees = $query->orderBy($sortField, $sortOrder)
+        $employees = $query
+            ->orderBy($sortField, $sortOrder)
             ->paginate($perPage)
             ->withQueryString();
 
@@ -59,7 +46,6 @@ class EmployeeController extends Controller
             'employees' => $employees,
             'positions' => Position::all(),
             'filters'   => $request->only('search', 'status', 'position_id'),
-            'currentView' => $routeName
         ]);
     }
 
@@ -96,7 +82,7 @@ class EmployeeController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'user_id'     => ['nullable', 'exists:users,id'],
+            'user_id'     => ['nullable', 'exists:users,id', 'unique:employees,user_id'],
             'first_name'  => ['required', 'string', 'max:100'],
             'last_name'   => ['required', 'string', 'max:100'],
             'birth_date'  => ['required', 'date', 'before:today'],
@@ -113,6 +99,7 @@ class EmployeeController extends Controller
             'birth_date.before'    => 'La date de naissance doit être dans le passé.',
             'email.required'       => 'L\'email est obligatoire.',
             'email.unique'         => 'Cet email est déjà utilisé.',
+            'user_id.unique'       => 'Ce compte utilisateur est déjà associé à un autre employé.',
             'position_id.required' => 'Le poste est obligatoire.',
             'salary_base.required' => 'Le salaire de base est obligatoire.',
             'status.required'      => 'Le statut est obligatoire.',
@@ -157,7 +144,7 @@ class EmployeeController extends Controller
     public function update(Request $request, Employee $employee)
     {
         $validated = $request->validate([
-            'user_id'     => ['nullable', 'exists:users,id'],
+            'user_id'     => ['nullable', 'exists:users,id', 'unique:employees,user_id,' . $employee->id],
             'first_name'  => ['sometimes', 'string', 'max:100'],
             'last_name'   => ['sometimes', 'string', 'max:100'],
             'birth_date'  => ['sometimes', 'date', 'before:today'],
@@ -170,6 +157,7 @@ class EmployeeController extends Controller
         ], [
             'birth_date.before'   => 'La date de naissance doit être dans le passé.',
             'email.unique'        => 'Cet email est déjà utilisé par un autre employé.',
+            'user_id.unique'       => 'Ce compte utilisateur est déjà associé à un autre employé.',
             'position_id.exists'  => 'Le poste sélectionné est invalide.',
             'salary_base.numeric' => 'Le salaire doit être un nombre.',
             'status.in'           => 'Le statut est invalide.',

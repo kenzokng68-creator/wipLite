@@ -31,6 +31,7 @@ const getStatusLabel = (status) => {
         case 'en attente': return 'warn';
         case 'suspendu': return 'danger';
         case 'terminé': return 'secondary';
+        case 'non assigné': return 'info';
         default: return 'secondary';
     }
 };
@@ -51,6 +52,23 @@ const validateAssignment = (id) => {
             router.post(route('planning.assignments.validate', id), {}, {
                 onSuccess: () => {
                     toast.add({ severity: 'success', summary: 'Validé', detail: 'Le planning a été validé.', life: 3000 });
+                }
+            });
+        }
+    });
+};
+
+const validateAll = () => {
+    confirm.require({
+        message: 'Voulez-vous valider TOUTES les affectations en attente ?',
+        header: 'Validation Globale',
+        icon: 'pi pi-check-circle',
+        acceptProps: { label: 'Tout Valider', severity: 'success' },
+        rejectProps: { label: 'Annuler', severity: 'secondary', variant: 'text' },
+        accept: () => {
+            router.post(route('planning.assignments.validateAll'), {}, {
+                onSuccess: () => {
+                    toast.add({ severity: 'success', summary: 'Validé', detail: 'Toutes les affectations en attente ont été validées.', life: 3000 });
                 }
             });
         }
@@ -102,12 +120,23 @@ const terminateAssignment = (id) => {
                 <p class="text-blue-500/70 text-xs font-bold uppercase tracking-widest mt-1">Gérez les plannings des superviseurs et leurs équipes</p>
             </div>
 
-            <Link :href="route('planning.assignments.create')">
-                <Button class="flex-shrink-0 !bg-blue-600 !border-none !rounded-2xl !px-8 !py-4 flex items-center gap-3 shadow-xl shadow-blue-500/20 hover:!bg-blue-700 hover:-translate-y-0.5 transition-all">
-                    <UserPlus class="w-5 h-5 text-white" />
-                    <span class="font-black text-white text-sm uppercase tracking-wider">Nouvelle Affectation</span>
+            <div class="flex items-center gap-4">
+                <Button 
+                    v-if="supervisorAssignments?.some(item => Array.isArray(item.assignments) && item.assignments.some(a => a.status === 'en attente'))"
+                    @click="validateAll" 
+                    class="!bg-emerald-600 !border-none !rounded-2xl !px-6 !py-4 flex items-center gap-3 shadow-xl shadow-emerald-500/20 hover:!bg-emerald-700 transition-all"
+                >
+                    <CheckCircle class="w-5 h-5 text-white" />
+                    <span class="font-black text-white text-sm uppercase tracking-wider">Tout Valider</span>
                 </Button>
-            </Link>
+
+                <Link :href="route('planning.assignments.create')">
+                    <Button class="flex-shrink-0 !bg-blue-600 !border-none !rounded-2xl !px-8 !py-4 flex items-center gap-3 shadow-xl shadow-blue-500/20 hover:!bg-blue-700 hover:-translate-y-0.5 transition-all">
+                        <UserPlus class="w-5 h-5 text-white" />
+                        <span class="font-black text-white text-sm uppercase tracking-wider">Nouvelle Affectation</span>
+                    </Button>
+                </Link>
+            </div>
         </div>
 
         <div class="py-8 space-y-4">
@@ -115,11 +144,15 @@ const terminateAssignment = (id) => {
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
                     <div class="flex items-center gap-5">
                         <div class="w-16 h-16 rounded-3xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-blue-500/20 group-hover:scale-110 transition-transform">
-                            {{ item.supervisor.name.substring(0, 2).toUpperCase() }}
+                            {{ item.supervisor?.name?.substring(0, 2).toUpperCase() ?? '??' }}
                         </div>
                         <div class="flex-1">
                             <div class="flex items-center flex-wrap gap-2">
-                                <h3 class="text-xl font-black text-slate-800">{{ item.supervisor.name }}</h3>
+                                <h3 class="text-xl font-black text-slate-800">{{ item.supervisor?.name ?? 'Superviseur inconnu' }}</h3>
+                                <div class="flex items-center gap-1.5 bg-slate-100 text-slate-600 px-3 py-1 rounded-xl border border-slate-200/50">
+                                    <Users class="w-3.5 h-3.5" />
+                                    <span class="text-[10px] font-black uppercase tracking-wider">{{ item.teleconseillers?.length ?? 0 }} agents</span>
+                                </div>
                                 <div v-if="item.supervisor.has_campaign" class="flex items-center gap-1.5 bg-blue-100/50 text-blue-700 px-3 py-1 rounded-xl border border-blue-200/50">
                                     <Megaphone class="w-3.5 h-3.5" />
                                     <span class="text-[10px] font-black uppercase tracking-wider">{{ item.supervisor.campaign_name }}</span>
@@ -197,7 +230,7 @@ const terminateAssignment = (id) => {
             </div>
         </div>
 
-        <Dialog v-model:visible="showTeleconseillersModal" header="Téléconseillers de l'équipe" :style="{ width: '60rem' }">
+        <Dialog v-model="showTeleconseillersModal" header="Téléconseillers de l'équipe" :style="{ width: '60rem' }">
             <div v-if="selectedSupervisor" class="space-y-4">
                 <h3 class="text-lg font-bold text-slate-800">Équipe de {{ selectedSupervisor.supervisor.name }}</h3>
                 <DataTable :value="selectedSupervisor.teleconseillers" class="p-datatable-sm">
@@ -205,18 +238,18 @@ const terminateAssignment = (id) => {
                         <template #body="{ data }">
                             <div class="flex items-center gap-3">
                                 <div class="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center text-green-600 font-bold text-xs">
-                                    {{ data.employee.name.substring(0, 2).toUpperCase() }}
+                                    {{ data.employee?.name?.substring(0, 2).toUpperCase() ?? '??' }}
                                 </div>
                                 <div>
-                                    <span class="font-bold text-slate-700">{{ data.employee.name }}</span>
-                                    <span class="text-[10px] text-slate-400 uppercase font-black ml-2">{{ data.employee.role }}</span>
+                                    <span class="font-bold text-slate-700">{{ data.employee?.name ?? 'Inconnu' }}</span>
+                                    <span class="text-[10px] text-slate-400 uppercase font-black ml-2">{{ data.employee?.role ?? 'TC' }}</span>
                                 </div>
                             </div>
                         </template>
                     </Column>
                     <Column field="model.name" header="Planning">
                         <template #body="{ data }">
-                            <div class="flex items-center gap-2 text-blue-600 font-semibold">
+                            <div class="flex items-center gap-2" :class="data.has_planning ? 'text-blue-600 font-semibold' : 'text-slate-400'">
                                 <Clock class="w-4 h-4" />
                                 {{ data.model.name }}
                             </div>
@@ -224,7 +257,7 @@ const terminateAssignment = (id) => {
                     </Column>
                     <Column header="Période">
                         <template #body="{ data }">
-                            <span class="text-xs text-slate-500 flex items-center gap-1">
+                            <span class="text-xs flex items-center gap-1" :class="data.has_planning ? 'text-slate-500' : 'text-slate-300'">
                                 <Calendar class="w-3 h-3" />
                                 Du {{ data.start_date }} au {{ data.end_date }}
                             </span>
@@ -237,7 +270,7 @@ const terminateAssignment = (id) => {
                     </Column>
                     <Column header="Actions" headerStyle="width: 15rem">
                         <template #body="{ data }">
-                            <div class="flex items-center gap-1.5">
+                            <div class="flex items-center gap-1.5" v-if="data.has_planning">
                                 <Button v-if="data.status === 'en attente'" @click="validateAssignment(data.id)" class="!bg-emerald-500 !border-none !text-white !px-3 !py-2 !text-[10px] !font-black !rounded-xl !uppercase !tracking-widest flex items-center gap-2 shadow-lg shadow-emerald-500/10 hover:!bg-emerald-600 transition-all">
                                     <CheckCircle class="w-3.5 h-3.5" />
                                     Valider
@@ -250,6 +283,9 @@ const terminateAssignment = (id) => {
                                     <XCircle class="w-3.5 h-3.5" />
                                     Terminer
                                 </Button>
+                            </div>
+                            <div v-else class="text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                                En attente superviseur
                             </div>
                         </template>
                     </Column>

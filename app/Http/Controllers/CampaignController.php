@@ -81,9 +81,9 @@ class CampaignController extends Controller
     {
         // Validation des données entrantes
         $validated = $request->validate([
-            'name' => 'required|string|max:255', // Nom obligatoire
+            'name' => 'required|string|max:255|unique:campaigns,name', // Nom obligatoire et unique
             'description' => 'nullable|string', // Description optionnelle
-            'start_date' => 'required|date', // Date de début obligatoire
+            'start_date' => 'required|date|after_or_equal:today', // Date de début obligatoire et >= aujourd'hui
             'end_date' => 'nullable|date|after_or_equal:start_date', // Date de fin doit être après ou égale au début
             'status' => 'required|in:active,inactive,terminee', // Statut limité aux valeurs définies
         ]);
@@ -154,9 +154,9 @@ class CampaignController extends Controller
     {
         // Validation des données de mise à jour
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
+            'name' => 'required|string|max:255|unique:campaigns,name,' . $campaign->id, // Unique sauf pour la campagne actuelle
             'description' => 'nullable|string',
-            'start_date' => 'required|date',
+            'start_date' => 'required|date', // Pas forcément after:today pour l'update si la campagne a déjà commencé
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'status' => 'required|in:active,inactive,terminee',
         ]);

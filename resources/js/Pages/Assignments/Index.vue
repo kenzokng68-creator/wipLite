@@ -26,6 +26,8 @@ const assignmentDialog = ref(false); // Modal de nouvelle affectation
 const releaseDialog = ref(false);    // Modal de libération/transfert
 const submitted = ref(false);
 
+const today = new Date().toISOString().split('T')[0];
+
 // Objet pour stocker les données du formulaire de nouvelle affectation
 const newAssignment = ref({
     employee_id: null,
@@ -212,7 +214,7 @@ const getPositionSeverity = (code) => {
                     <!-- Date de début -->
                     <div>
                         <label class="font-bold block mb-1">Date de début</label>
-                        <InputText type="date" v-model="newAssignment.start_date" />
+                        <InputText type="date" v-model="newAssignment.start_date" :min="today" />
                     </div>
                 </div>
 

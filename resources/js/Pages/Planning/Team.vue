@@ -66,7 +66,7 @@ const getStatusLabel = (status) => {
 
                     <Column header="Planning">
                         <template #body="{ data }">
-                            <div class="flex items-center gap-2 text-blue-600 font-semibold">
+                            <div class="flex items-center gap-2" :class="data.has_planning ? 'text-blue-600 font-semibold' : 'text-slate-400'">
                                 <Clock class="w-3.5 h-3.5" />
                                 {{ data.model.name }}
                             </div>
@@ -75,9 +75,9 @@ const getStatusLabel = (status) => {
 
                     <Column header="Période">
                         <template #body="{ data }">
-                            <div class="flex flex-col text-xs font-medium text-slate-500">
+                            <div class="flex flex-col text-xs font-medium" :class="data.has_planning ? 'text-slate-500' : 'text-slate-300'">
                                 <span class="flex items-center gap-1">
-                                    <Calendar class="w-3 h-3 text-slate-300" />
+                                    <Calendar class="w-3 h-3" />
                                     Du {{ data.start_date }} au {{ data.end_date }}
                                 </span>
                             </div>

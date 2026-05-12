@@ -95,6 +95,8 @@ const activeTab = ref(0)
  */
 const hoveredId = ref(null)
 
+const today = new Date().toISOString().substring(0, 10)
+
 /**
  * =========================================================
  * DIALOG LIBÉRATION

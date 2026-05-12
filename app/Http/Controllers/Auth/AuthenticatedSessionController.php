@@ -31,9 +31,21 @@ class AuthenticatedSessionController extends Controller
     {
         $request->authenticate();
 
+        $user = Auth::user();
+
+        // Vérifier si l'employé lié est actif
+        if ($user->employee && $user->employee->status !== 'actif') {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()->route('login')->withErrors([
+                'email' => 'Votre compte est désactivé car votre profil employé n\'est plus actif.',
+            ]);
+        }
+
         $request->session()->regenerate();
 
-        $user = $request->user();
         $role = $user->role?->name;
 
         $redirectRoute = match ($role) {

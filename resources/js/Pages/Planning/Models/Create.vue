@@ -57,7 +57,10 @@ const submit = () => {
 };
 
 const goToIndex = () => {
-    router.visit(route('planning.models.index'));
+    showSuccessModal.value = false;
+    setTimeout(() => {
+        router.visit(route('planning.models.index'));
+    }, 100);
 };
 </script>
 
@@ -168,7 +171,7 @@ const goToIndex = () => {
 
         <!-- Modal de Succès -->
         <Dialog
-            v-model:visible="showSuccessModal"
+            v-model="showSuccessModal"
             modal
             :closable="false"
             :style="{ width: '28rem' }"

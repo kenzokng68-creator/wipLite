@@ -29,7 +29,21 @@ const form = useForm({
     end_date: null,
 });
 
+const startDate = ref(null);
+const endDate = ref(null);
+
+const formatDate = (date) => {
+    if (!date) return null;
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 const submit = () => {
+    form.start_date = formatDate(startDate.value);
+    form.end_date = formatDate(endDate.value);
     form.post(route("planning.assignments.store"), {
         onSuccess: () => {
             showSuccessModal.value = true;
@@ -38,7 +52,10 @@ const submit = () => {
 };
 
 const goToIndex = () => {
-    router.visit(route('planning.assignments.index'));
+    showSuccessModal.value = false;
+    setTimeout(() => {
+        router.visit(route('planning.assignments.index'));
+    }, 100);
 };
 </script>
 
@@ -103,7 +120,7 @@ const goToIndex = () => {
                         <div class="flex flex-col gap-3">
                             <label class="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Date de début</label>
                             <Calendar
-                                v-model="form.start_date"
+                                v-model="startDate"
                                 date-format="yy-mm-dd"
                                 :min-date="new Date()"
                                 placeholder="Sélectionnez la date"
@@ -115,9 +132,9 @@ const goToIndex = () => {
                         <div class="flex flex-col gap-3">
                             <label class="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Date de fin</label>
                             <Calendar
-                                v-model="form.end_date"
+                                v-model="endDate"
                                 date-format="yy-mm-dd"
-                                :min-date="form.start_date || new Date()"
+                                :min-date="startDate || new Date()"
                                 placeholder="Sélectionnez la date"
                                 :class="{'p-invalid': form.errors.end_date}"
                                 input-class="!w-full !rounded-2xl !py-4 !px-6 !bg-slate-50/50 !border-slate-100 focus:!bg-white focus:!border-blue-500"
@@ -139,7 +156,7 @@ const goToIndex = () => {
         </div>
 
         <Dialog
-            v-model:visible="showSuccessModal"
+            v-model="showSuccessModal"
             modal
             :closable="false"
             :style="{ width: '28rem' }"

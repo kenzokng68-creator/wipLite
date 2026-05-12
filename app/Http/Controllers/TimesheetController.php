@@ -79,7 +79,39 @@ class TimesheetController extends Controller
             'status'       => 'brouillon',
         ]);
 
-        return redirect()->route('calendar.index');
+        return redirect()->route('timesheets.index');
+    }
+
+    /**
+     * PAGE DE SAISIE DES HEURES
+     */
+    public function entry(Request $request)
+    {
+        $date = $request->input('date', now()->toDateString());
+        $user = auth()->user();
+        $employee = $user->employee;
+        
+        $subordinates = [];
+        if ($employee) {
+            $subordinates = \App\Models\Employee::with('user')->whereHas('assignments', function ($q) use ($employee) {
+                $q->where('manager_id', $employee->id)->where('status', 'actif');
+            })->get();
+        }
+
+        $plannings = \App\Models\PlanningAssignment::with('planningModel')
+            ->whereIn('employee_id', collect($subordinates)->pluck('id'))
+            ->where('status', 'valide')
+            ->get();
+
+        $startDate = Carbon::parse($date)->startOfWeek()->toDateString();
+        $endDate = Carbon::parse($date)->endOfWeek()->toDateString();
+
+        return Inertia::render('Timesheets/Entry', [
+            'subordinates' => $subordinates,
+            'plannings' => $plannings,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+        ]);
     }
 
     /**

@@ -27,8 +27,18 @@ import {
 } from 'lucide-vue-next';
 
 const page = usePage();
+const toast = useToast();
 const activeMainMenu = ref('dashboard');
 const isHoveringSidebar = ref(false);
+
+watch(() => page.props.flash, (flash) => {
+  if (flash.success) {
+    toast.add({ severity: 'success', summary: 'Succès', detail: flash.success, life: 3000 });
+  }
+  if (flash.error) {
+    toast.add({ severity: 'error', summary: 'Erreur', detail: flash.error, life: 5000 });
+  }
+}, { deep: true, immediate: true });
 
 const findActiveMenu = () => {
   const currentPath = page.url.split('?')[0];
@@ -579,9 +589,11 @@ const logout = () => {
           <Dropdown align="right" width="56">
             <template #trigger>
               <button class="flex items-center gap-4 p-1 pr-4 rounded-full hover:bg-slate-50 transition-all group">
-                <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-sm shadow-md group-hover:scale-105 transition-transform">
-                  {{ page.props.auth?.user?.name?.charAt(0)?.toUpperCase() ?? 'U' }}
-                </div>
+                <img 
+                  :src="page.props.auth.user.profile_photo_url" 
+                  :alt="page.props.auth.user.name"
+                  class="w-10 h-10 rounded-full object-cover shadow-md group-hover:scale-105 transition-transform border-2 border-blue-100"
+                >
                 <div class="text-left hidden sm:block">
                   <p class="text-sm font-black text-slate-800 leading-none">{{ page.props.auth?.user?.name }}</p>
                   <p class="text-[10px] font-bold text-blue-500 uppercase tracking-tighter mt-1">{{ page.props.auth?.role }}</p>

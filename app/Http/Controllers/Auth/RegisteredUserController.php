@@ -33,7 +33,6 @@ class RegisteredUserController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $request->validate([
-            'name' => 'required|string|max:255',
             'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
@@ -41,11 +40,16 @@ class RegisteredUserController extends Controller
         $tcRole = Role::firstOrCreate(['name' => 'tc']);
 
         $user = User::create([
-            'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'role_id' => $tcRole->id,
         ]);
+
+        // Lier l'employé s'il existe
+        $employee = \App\Models\Employee::where('email', $request->email)->first();
+        if ($employee) {
+            $employee->update(['user_id' => $user->id]);
+        }
 
         event(new Registered($user));
 

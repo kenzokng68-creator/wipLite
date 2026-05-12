@@ -215,6 +215,48 @@ const confirmDelete = (employee) => {
         },
     });
 };
+
+// ---------------------------------------------------------
+// TOGGLE STATUT (Désactiver / Réactiver)
+// ---------------------------------------------------------
+const toggleStatus = (employee) => {
+    if (employee.status === 'inactif') {
+        // Cas : Réactivation
+        confirm.require({
+            message: `Voulez-vous réactiver ${employee.first_name} ${employee.last_name} ?`,
+            header: "Confirmation de réactivation",
+            icon: "pi pi-info-circle",
+            rejectProps: {
+                label: "Annuler",
+                severity: "secondary",
+                variant: "text",
+            },
+            acceptProps: { label: "Réactiver", severity: "success" },
+            accept: () => {
+                // On utilise PATCH ou PUT vers une route dédiée ou l'update classique
+                // Ici, j'utilise la route 'update' en envoyant juste le nouveau statut
+                router.put(route("employees.update", employee.id), {
+                    ...employee,
+                    status: 'actif',
+                    birth_date: employee.birth_date ? new Date(employee.birth_date).toISOString().split("T")[0] : null,
+                }, {
+                    preserveScroll: true,
+                    onSuccess: () =>
+                        toast.add({
+                            severity: "success",
+                            summary: "Réactivé",
+                            detail: `${employee.first_name} ${employee.last_name} est de nouveau actif.`,
+                            life: 3000,
+                        }),
+                });
+            },
+        });
+    } else {
+        // Cas : Désactivation (On appelle votre fonction existante)
+        confirmDelete(employee);
+    }
+};
+
 </script>
 
 <template>
@@ -335,13 +377,12 @@ const confirmDelete = (employee) => {
                             class="mr-2"
                             @click="openEdit(data)"
                         />
-                        <Button
-                            v-if="data.status !== 'inactif'"
-                            icon="pi pi-ban"
-                            variant="outlined"
-                            rounded
-                            severity="danger"
-                            @click="confirmDelete(data)"
+                         <Button 
+                            :icon="data.status === 'inactif' ? 'pi pi-refresh' : 'pi pi-ban'" 
+                            :severity="data.status === 'inactif' ? 'success' : 'danger'"
+                            variant="outlined" 
+                            rounded 
+                            @click="toggleStatus(data)" 
                         />
                     </template>
                 </Column>
@@ -352,7 +393,7 @@ const confirmDelete = (employee) => {
         <!-- DIALOG — Formulaire Créer / Modifier             -->
         <!-- ================================================ -->
         <Dialog
-            v-model:visible="dialogVisible"
+            v-model="dialogVisible"
             :header="isEditing ? 'Modifier l\'employé' : 'Nouvel employé'"
             :style="{ width: '650px' }"
             :modal="true"

@@ -205,7 +205,7 @@ const weekDays = [
 
         <!-- Fenêtre Modale (Dialog) -->
         <Dialog
-            v-model:visible="showModal"
+            v-model="showModal"
             modal
             header=" "
             :style="{ width: '38rem' }"

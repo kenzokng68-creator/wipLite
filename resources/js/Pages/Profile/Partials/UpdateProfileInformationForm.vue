@@ -4,6 +4,7 @@ import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { Link, useForm, usePage } from '@inertiajs/vue3';
+import { ref } from 'vue';
 
 defineProps({
     mustVerifyEmail: {
@@ -17,41 +18,99 @@ defineProps({
 const user = usePage().props.auth.user;
 
 const form = useForm({
-    name: user.name,
     email: user.email,
+    photo: null,
 });
+
+const updateProfileInformation = () => {
+    form.post(route('profile.update'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            form.reset('photo');
+        },
+    });
+};
+
+const photoInput = ref(null);
+const photoPreview = ref(null);
+
+const selectNewPhoto = () => {
+    photoInput.value.click();
+};
+
+const updatePhotoPreview = () => {
+    const photo = photoInput.value.files[0];
+
+    if (!photo) return;
+
+    form.photo = photo;
+
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+        photoPreview.value = e.target.result;
+    };
+
+    reader.readAsDataURL(photo);
+};
 </script>
 
 <template>
     <section>
         <header>
             <h2 class="text-lg font-medium text-gray-900">
-                Profile Information
+                Informations du profil
             </h2>
 
             <p class="mt-1 text-sm text-gray-600">
-                Update your account's profile information and email address.
+                Mettez à jour les informations de profil et l'adresse e-mail de votre compte.
             </p>
         </header>
 
         <form
-            @submit.prevent="form.patch(route('profile.update'))"
+            @submit.prevent="updateProfileInformation"
             class="mt-6 space-y-6"
         >
-            <div>
-                <InputLabel for="name" value="Name" />
+            <!-- Photo de profil -->
+            <div class="col-span-6 sm:col-span-4">
+                <!-- Input de fichier caché -->
+                <input
+                    type="file"
+                    class="hidden"
+                    ref="photoInput"
+                    @change="updatePhotoPreview"
+                >
 
-                <TextInput
-                    id="name"
-                    type="text"
-                    class="mt-1 block w-full"
-                    v-model="form.name"
-                    required
-                    autofocus
-                    autocomplete="name"
-                />
+                <InputLabel for="photo" value="Photo" />
 
-                <InputError class="mt-2" :message="form.errors.name" />
+                <!-- Photo actuelle -->
+                <div v-show="!photoPreview" class="mt-2">
+                    <img :src="user.profile_photo_url" :alt="user.name" class="rounded-full h-20 w-20 object-cover border-2 border-indigo-500 shadow-sm">
+                </div>
+
+                <!-- Nouvelle photo preview -->
+                <div v-show="photoPreview" class="mt-2">
+                    <span
+                        class="block rounded-full w-20 h-20 bg-cover bg-no-repeat bg-center border-2 border-indigo-500 shadow-sm"
+                        :style="'background-image: url(\'' + photoPreview + '\');'"
+                    >
+                    </span>
+                </div>
+
+                <div class="mt-2 flex gap-2">
+                    <PrimaryButton type="button" @click.prevent="selectNewPhoto">
+                        Changer la photo
+                    </PrimaryButton>
+                    
+                    <p v-if="form.errors.photo" class="text-sm text-red-600 mt-2">
+                        {{ form.errors.photo }}
+                    </p>
+                </div>
+            </div>
+
+            <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Nom complet (depuis employé)</p>
+                <p class="text-md font-bold text-gray-800">{{ user.name }}</p>
             </div>
 
             <div>
